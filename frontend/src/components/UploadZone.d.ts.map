@@ -1,0 +1,1 @@
+{"version":3,"file":"UploadZone.d.ts","sourceRoot":"","sources":["UploadZone.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAmB,MAAM,OAAO,CAAC;AAExC,UAAU,eAAe;IACvB,eAAe,EAAE,CAAC,KAAK,EAAE,IAAI,EAAE,KAAK,IAAI,CAAC;IACzC,QAAQ,CAAC,EAAE,OAAO,CAAC;CACpB;AAED,eAAO,MAAM,UAAU,EAAE,KAAK,CAAC,EAAE,CAAC,eAAe,CAyDhD,CAAC"}

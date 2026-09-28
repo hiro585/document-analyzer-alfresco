@@ -6,6 +6,8 @@ export interface Document {
   extractedData: Record<string, any>;
   fileType: 'pdf' | 'image' | 'text';
   keywords: string[];
+  alfrescoNodeId?: string;
+  alfrescoExportedAt?: string;
 }
 
 export interface ExtractedData {

@@ -10,6 +10,8 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadDocuments();
@@ -38,17 +40,81 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     }
   };
 
+  const handleExportToAlfresco = async (docId: string) => {
+    setExporting(docId);
+    try {
+      const result = await api.exportDocumentToAlfresco(docId);
+      if (result.success) {
+        setExportStatus(prev => ({
+          ...prev,
+          [docId]: `✅ Exported to Alfresco (Node: ${result.data.nodeId})`,
+        }));
+        // Update selected document
+        setSelectedDoc(prev =>
+          prev?.id === docId
+            ? { ...prev, alfrescoNodeId: result.data.nodeId, alfrescoExportedAt: new Date().toISOString() }
+            : prev
+        );
+        // Refresh documents list
+        setTimeout(loadDocuments, 1000);
+      } else {
+        setExportStatus(prev => ({
+          ...prev,
+          [docId]: `❌ Export failed: ${result.error}`,
+        }));
+      }
+    } catch (error) {
+      setExportStatus(prev => ({
+        ...prev,
+        [docId]: `❌ Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      }));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleExportAll = async () => {
+    if (!confirm(`Export all ${documents.length} documents to Alfresco?`)) return;
+    setExporting('all');
+    try {
+      const result = await api.exportAllToAlfresco();
+      if (result.success) {
+        alert(`✅ Exported ${result.exported} documents to Alfresco`);
+        if (result.failed > 0) {
+          alert(`⚠️ ${result.failed} documents failed to export`);
+        }
+        // Refresh documents list
+        loadDocuments();
+      }
+    } catch (error) {
+      alert(`❌ Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-800">📚 Documents</h2>
-          <button
-            onClick={loadDocuments}
-            className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm"
-          >
-            🔄 Refresh
-          </button>
+          <div className="space-x-2 flex">
+            <button
+              onClick={loadDocuments}
+              className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm"
+            >
+              🔄 Refresh
+            </button>
+            {documents.length > 0 && (
+              <button
+                onClick={handleExportAll}
+                disabled={exporting === 'all'}
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded text-sm"
+              >
+                {exporting === 'all' ? '⏳ Exporting...' : '📤 Export All to Alfresco'}
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -72,7 +138,14 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
       {selectedDoc && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <div className="flex items-start justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-800">{selectedDoc.filename}</h3>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-gray-800">{selectedDoc.filename}</h3>
+              {selectedDoc.alfrescoNodeId && (
+                <p className="text-sm text-green-600 mt-1">
+                  ✅ Exported to Alfresco on {new Date(selectedDoc.alfrescoExportedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
             <button
               onClick={() => setSelectedDoc(null)}
               className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
@@ -124,12 +197,29 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
               </div>
             </div>
 
-            <button
-              onClick={() => handleDelete(selectedDoc.id)}
-              className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
-            >
-              🗑️ Delete Document
-            </button>
+            {exportStatus[selectedDoc.id] && (
+              <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                {exportStatus[selectedDoc.id]}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {!selectedDoc.alfrescoNodeId && (
+                <button
+                  onClick={() => handleExportToAlfresco(selectedDoc.id)}
+                  disabled={exporting === selectedDoc.id}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded"
+                >
+                  {exporting === selectedDoc.id ? '⏳ Exporting...' : '📤 Export to Alfresco'}
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(selectedDoc.id)}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
+              >
+                🗑️ Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

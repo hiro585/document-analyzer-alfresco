@@ -36,5 +36,18 @@ export const api = {
     savePrompt: async (name, prompt) => {
         return client.post('/prompts', { name, prompt }).then(r => r.data);
     },
+    // Alfresco operations
+    testAlfrescoConnection: async () => {
+        return client.get('/alfresco/test').then(r => r.data);
+    },
+    exportDocumentToAlfresco: async (documentId) => {
+        return client.post(`/alfresco/export/${documentId}`).then(r => r.data);
+    },
+    exportAllToAlfresco: async () => {
+        return client.post('/alfresco/export-all').then(r => r.data);
+    },
+    listAlfrescoDocuments: async () => {
+        return client.get('/alfresco/list').then(r => r.data);
+    },
 };
 //# sourceMappingURL=client.js.map

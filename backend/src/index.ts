@@ -1,3 +1,4 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import * as path from 'path';
 import * as url from 'url';
@@ -10,6 +11,9 @@ import { createDocumentsRouter } from './routes/documents.js';
 import { createSearchRouter } from './routes/search.js';
 import { createPromptsRouter } from './routes/prompts.js';
 import { createLLMRouter } from './routes/llm.js';
+import { createAlfrescoExportRouter } from './routes/alfresco-export.js';
+
+dotenv.config();
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +45,7 @@ app.use('/api/documents', createDocumentsRouter(storage));
 app.use('/api/search', createSearchRouter(search));
 app.use('/api/prompts', createPromptsRouter(storage));
 app.use('/api/llm', createLLMRouter(storage, search, ollama));
+app.use('/api/alfresco', createAlfrescoExportRouter(storage));
 
 // Health check
 app.get('/api/health', (req, res) => {

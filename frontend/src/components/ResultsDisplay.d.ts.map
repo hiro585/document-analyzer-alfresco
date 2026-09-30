@@ -1,1 +1,0 @@
-{"version":3,"file":"ResultsDisplay.d.ts","sourceRoot":"","sources":["ResultsDisplay.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAE1B,UAAU,mBAAmB;IAC3B,IAAI,EAAE,MAAM,CAAC,MAAM,EAAE,GAAG,CAAC,GAAG,IAAI,CAAC;IACjC,OAAO,CAAC,EAAE,OAAO,CAAC;CACnB;AAED,eAAO,MAAM,cAAc,EAAE,KAAK,CAAC,EAAE,CAAC,mBAAmB,CA2BxD,CAAC"}

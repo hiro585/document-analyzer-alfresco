@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<translations>
+  <!-- Header -->
+  <string key="app.title.main" en="📊 Document Analyzer" ja="📊 ドキュメントアナライザー" />
+  <string key="app.title.subtitle" en="Upload, analyze, and search documents using local AI (Ollama)" ja="ローカルAI（Ollama）を使用してドキュメントをアップロード、分析、検索します" />
+
+  <!-- Navigation Tabs -->
+  <string key="nav.upload" en="📤 Upload" ja="📤 アップロード" />
+  <string key="nav.documents" en="📚 Documents" ja="📚 ドキュメント" />
+  <string key="nav.search" en="🔍 Search and Chat" ja="🔍 検索 and チャット" />
+
+  <!-- Language Selector -->
+  <string key="lang.selector" en="Language" ja="言語" />
+  <string key="lang.english" en="English" ja="英語" />
+  <string key="lang.japanese" en="日本語" ja="日本語" />
+
+  <!-- Upload Page -->
+  <string key="upload.heading" en="📤 Upload and Analyze" ja="📤 アップロード and 分析" />
+  <string key="upload.selected" en="✓ Selected:" ja="✓ 選択済み:" />
+  <string key="upload.button" en="🚀 Upload and Analyze" ja="🚀 アップロード and 分析" />
+  <string key="upload.loading" en="⏳ Analyzing..." ja="⏳ 分析中..." />
+  <string key="upload.error.no_file_prompt" en="Please select a file and enter a prompt" ja="ファイルを選択し、プロンプトを入力してください" />
+  <string key="upload.error.prefix" en="❌" ja="❌" />
+  <string key="upload.success" en="✓ Document uploaded successfully! ID:" ja="✓ ドキュメントが正常にアップロードされました！ID:" />
+  <string key="upload.export.alfresco" en="📤 Export to Alfresco" ja="📤 Alfrescoにエクスポート" />
+  <string key="upload.export.loading" en="⏳ Exporting to Alfresco..." ja="⏳ Alfrescoにエクスポート中..." />
+  <string key="upload.export.success" en="✅ Exported to Alfresco" ja="✅ Alfrescoにエクスポート済み" />
+  <string key="upload.export.node_id" en="Node ID:" ja="ノードID:" />
+  <string key="upload.export.failed" en="Failed to export:" ja="エクスポートに失敗しました:" />
+
+  <!-- Upload Zone -->
+  <string key="uploadzone.drag" en="Drag and drop files here" ja="ここにファイルをドラッグ＆ドロップ" />
+  <string key="uploadzone.or" en="or" ja="または" />
+  <string key="uploadzone.click" en="click to select" ja="クリックして選択" />
+  <string key="uploadzone.supported" en="Supported formats: PDF, DOCX, PPTX, XLSX" ja="サポートされている形式: PDF、DOCX、PPTX、XLSX" />
+
+  <!-- Prompt Editor -->
+  <string key="prompt.label" en="Enter your analysis prompt:" ja="分析プロンプトを入力:" />
+  <string key="prompt.placeholder" en="E.g., Extract all invoice numbers and dates" ja="例: すべての請求書番号と日付を抽出" />
+  <string key="prompt.character_count" en="characters" ja="文字" />
+
+  <!-- Results Display -->
+  <string key="results.heading" en="Analysis Results" ja="分析結果" />
+  <string key="results.empty" en="No results to display" ja="表示するデータがありません" />
+
+  <!-- Documents Page -->
+  <string key="documents.heading" en="📚 Documents" ja="📚 ドキュメント" />
+  <string key="documents.loading" en="Loading documents..." ja="ドキュメント読み込み中..." />
+  <string key="documents.error" en="Failed to load documents" ja="ドキュメントの読み込みに失敗しました" />
+  <string key="documents.empty" en="No documents uploaded yet" ja="まだドキュメントがアップロードされていません" />
+  <string key="documents.uploaded" en="Uploaded:" ja="アップロード:" />
+  <string key="documents.view" en="👁️ View" ja="👁️ 表示" />
+  <string key="documents.delete" en="🗑️ Delete" ja="🗑️ 削除" />
+  <string key="documents.delete.confirm" en="Are you sure you want to delete this document?" ja="このドキュメントを削除してもよろしいですか?" />
+  <string key="documents.delete.loading" en="Deleting..." ja="削除中..." />
+  <string key="documents.view.thumbnail" en="Thumbnail view" ja="サムネイル表示" />
+  <string key="documents.view.list" en="List view" ja="リスト表示" />
+  <string key="documents.list.type" en="Type" ja="種類" />
+  <string key="documents.list.prompt" en="Prompt" ja="プロンプト" />
+  <string key="documents.list.data" en="Extracted Data" ja="抽出データ" />
+  <string key="documents.list.status" en="Status" ja="ステータス" />
+  <string key="documents.list.actions" en="Actions" ja="操作" />
+  <string key="documents.list.alfresco" en="In Alfresco" ja="Alfresco登録済" />
+
+  <!-- Document Card -->
+  <string key="document.id" en="ID:" ja="ID:" />
+  <string key="document.filename" en="Filename:" ja="ファイル名:" />
+  <string key="document.uploaded" en="Uploaded:" ja="アップロード:" />
+  <string key="document.data" en="Extracted Data:" ja="抽出されたデータ:" />
+
+  <!-- Search Page -->
+  <string key="search.heading" en="🔍 Search and Chat" ja="🔍 検索 and チャット" />
+  <string key="search.query_placeholder" en="Enter search query or question..." ja="検索クエリまたは質問を入力..." />
+  <string key="search.search_button" en="🔍 Search" ja="🔍 検索" />
+  <string key="search.loading" en="Searching..." ja="検索中..." />
+  <string key="search.error" en="Search failed" ja="検索に失敗しました" />
+  <string key="search.no_results" en="No results found" ja="結果が見つかりません" />
+  <string key="search.chat_placeholder" en="Ask a question about the search results..." ja="検索結果について質問..." />
+  <string key="search.send" en="📤 Send" ja="📤 送信" />
+  <string key="search.chat_loading" en="🤖 Thinking..." ja="🤖 考え中..." />
+
+  <!-- Chat Panel -->
+  <string key="chat.empty" en="No messages yet. Search for documents to start chatting!" ja="メッセージがありません。ドキュメントを検索してチャットを開始します！" />
+  <string key="chat.user" en="You" ja="あなた" />
+  <string key="chat.assistant" en="Assistant" ja="アシスタント" />
+
+  <!-- Footer -->
+  <string key="footer.ollama" en="💡 Make sure Ollama is running:" ja="💡 Ollamaが実行中であることを確認:" />
+
+  <!-- Prompt Templates -->
+  <string key="prompt.template.1.name" en="Extract Numbers" ja="数字を抽出" />
+  <string key="prompt.template.1.text" en="Extract all numbers, amounts, and numerical values from this document." ja="このドキュメントからすべての数字、金額、および数値を抽出してください。" />
+
+  <string key="prompt.template.2.name" en="Extract Names and Organizations" ja="名前と組織を抽出" />
+  <string key="prompt.template.2.text" en="Find and extract all names of people and organizations mentioned in this document." ja="このドキュメントで言及されている人々と組織のすべての名前を検索して抽出してください。" />
+
+  <string key="prompt.template.3.name" en="Summarize Document" ja="ドキュメントを要約" />
+  <string key="prompt.template.3.text" en="Provide a concise summary of the main content of this document." ja="このドキュメントの主な内容の簡潔な要約を提供してください。" />
+
+  <string key="prompt.template.4.name" en="Extract Key Information" ja="重要な情報を抽出" />
+  <string key="prompt.template.4.text" en="Extract the most important information from this document in a structured format." ja="このドキュメントから最も重要な情報を構造化された形式で抽出してください。" />
+
+  <!-- Common -->
+  <string key="common.loading" en="Loading..." ja="読み込み中..." />
+  <string key="common.error" en="Error" ja="エラー" />
+  <string key="common.success" en="Success" ja="成功" />
+  <string key="common.cancel" en="Cancel" ja="キャンセル" />
+  <string key="common.ok" en="OK" ja="OK" />
+  <string key="common.back" en="Back" ja="戻る" />
+</translations>

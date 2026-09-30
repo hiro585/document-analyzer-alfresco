@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { DocumentCard } from '../components/DocumentCard';
+import { DocumentListView } from '../components/DocumentListView';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface DocumentsPageProps {
   refreshTrigger?: number;
 }
 
+type ViewMode = 'thumbnail' | 'list';
+
 export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
+  const { t } = useLanguage();
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<Record<string, string>>({});
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'thumbnail';
+    return (localStorage.getItem('documentsViewMode') as ViewMode) || 'thumbnail';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('documentsViewMode', viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     loadDocuments();
@@ -30,7 +43,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
   };
 
   const handleDelete = async (docId: string) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
+    if (!confirm(t('documents.delete.confirm'))) return;
     try {
       await api.deleteDocument(docId);
       setDocuments(docs => docs.filter(d => d.id !== docId));
@@ -97,8 +110,28 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">📚 Documents</h2>
-          <div className="space-x-2 flex">
+          <h2 className="text-2xl font-bold text-gray-800">{t('documents.heading')}</h2>
+          <div className="space-x-2 flex items-center">
+            <div className="flex border border-gray-300 rounded overflow-hidden">
+              <button
+                onClick={() => setViewMode('thumbnail')}
+                title={t('documents.view.thumbnail')}
+                className={`px-3 py-1 text-sm ${
+                  viewMode === 'thumbnail' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                ▦
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                title={t('documents.view.list')}
+                className={`px-3 py-1 text-sm border-l border-gray-300 ${
+                  viewMode === 'list' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                ☰
+              </button>
+            </div>
             <button
               onClick={loadDocuments}
               className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm"
@@ -118,10 +151,10 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
         </div>
 
         {loading ? (
-          <p className="text-center text-gray-500 py-8">Loading documents...</p>
+          <p className="text-center text-gray-500 py-8">{t('documents.loading')}</p>
         ) : documents.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">No documents yet. Upload one to get started!</p>
-        ) : (
+          <p className="text-center text-gray-500 py-8">{t('documents.empty')}</p>
+        ) : viewMode === 'thumbnail' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {documents.map(doc => (
               <DocumentCard
@@ -132,6 +165,8 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
               />
             ))}
           </div>
+        ) : (
+          <DocumentListView documents={documents} onDelete={handleDelete} onClick={setSelectedDoc} />
         )}
       </div>
 

@@ -1,12 +1,15 @@
 import React from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
+import type { Document } from '../types';
 
 interface DocumentCardProps {
-  document: any;
+  document: Document;
   onDelete?: (id: string) => void;
-  onClick?: (doc: any) => void;
+  onClick?: (doc: Document) => void;
 }
 
 export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, onClick }) => {
+  const { t } = useLanguage();
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -47,35 +50,43 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, 
 
       <div className="space-y-1">
         <p className="text-xs text-gray-600 line-clamp-2">
-          <span className="font-semibold">Prompt:</span> {document.originalPrompt}
+          <span className="font-semibold">{t('search.query_placeholder')}:</span> {document.originalPrompt}
         </p>
       </div>
 
       <div className="mt-3 pt-3 border-t border-gray-100">
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">Extracted:</h4>
+        <h4 className="text-xs font-semibold text-gray-700 mb-2">{t('document.data')}:</h4>
         <div className="space-y-1">
-          {Object.entries(document.extractedData).slice(0, 3).map(([key, value]) => (
-            <div key={key} className="text-xs">
-              <span className="text-gray-600">{key}:</span>{' '}
-              <span className="text-gray-800 truncate block">
-                {typeof value === 'string' ? value : JSON.stringify(value)}
-              </span>
-            </div>
-          ))}
+          {Object.entries(document.extractedData)
+            .slice(0, 3)
+            .map(([key, value]) => (
+              <div key={key} className="text-xs">
+                <span className="text-gray-600">{key}:</span>{' '}
+                <span className="text-gray-800 truncate block">
+                  {typeof value === 'string' ? value : JSON.stringify(value)}
+                </span>
+              </div>
+            ))}
           {Object.keys(document.extractedData).length > 3 && (
             <p className="text-xs text-gray-500">+{Object.keys(document.extractedData).length - 3} more fields</p>
           )}
         </div>
       </div>
 
+      {document.evaluations?.some(e => e.status === 'issues_found') && (
+        <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded">
+          <p className="text-xs text-orange-700">⚠️ {t('agents.results.issues_badge')}</p>
+        </div>
+      )}
+
       {document.alfrescoNodeId && (
         <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
           <p className="text-xs text-green-700">
             ✅ <strong>In Alfresco</strong>
           </p>
-          <p className="text-xs text-green-600">
-            Exported: {formatDate(document.alfrescoExportedAt)}
-          </p>
+          {document.alfrescoExportedAt && (
+            <p className="text-xs text-green-600">Exported: {formatDate(document.alfrescoExportedAt)}</p>
+          )}
         </div>
       )}
     </div>

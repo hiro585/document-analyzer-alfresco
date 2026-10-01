@@ -6,9 +6,7 @@ export class StorageService {
   constructor(private dataDir: string) {}
 
   async initializeStorage(): Promise<void> {
-    const dirs = [
-      path.join(this.dataDir, 'documents'),
-    ];
+    const dirs = [path.join(this.dataDir, 'documents')];
 
     for (const dir of dirs) {
       try {
@@ -25,10 +23,56 @@ export class StorageService {
     } catch {
       const defaultPrompts: PromptStore = {
         templates: [
-          { id: '1', name: 'Extract Numbers', prompt: 'Extract all numbers, amounts, and numerical values from this document.', isTemplate: true },
-          { id: '2', name: 'Extract Names & Organizations', prompt: 'Find and extract all names of people and organizations mentioned in this document.', isTemplate: true },
-          { id: '3', name: 'Summarize Document', prompt: 'Provide a concise summary of the main content of this document.', isTemplate: true },
-          { id: '4', name: 'Extract Key Information', prompt: 'Extract the most important information from this document in a structured format.', isTemplate: true },
+          {
+            id: '1',
+            name: 'Extract Numbers',
+            prompt: 'Extract all numbers, amounts, and numerical values from this document.',
+            isTemplate: true,
+            translations: {
+              ja: {
+                name: '数字を抽出',
+                prompt: 'このドキュメントからすべての数字、金額、および数値を抽出してください。',
+              },
+            },
+          },
+          {
+            id: '2',
+            name: 'Extract Names & Organizations',
+            prompt: 'Find and extract all names of people and organizations mentioned in this document.',
+            isTemplate: true,
+            translations: {
+              ja: {
+                name: '名前と組織を抽出',
+                prompt: 'このドキュメントで言及されている人々と組織のすべての名前を検索して抽出してください。',
+              },
+            },
+          },
+          {
+            id: '3',
+            name: 'Summarize Document',
+            prompt:
+              'Provide a concise summary of the main content of this document. Include all key details exactly as written, including handwritten notes, signatures, dates, and amounts — do not omit them for the sake of brevity.',
+            isTemplate: true,
+            translations: {
+              ja: {
+                name: 'ドキュメントを要約',
+                prompt:
+                  'このドキュメントの主な内容の簡潔な要約を提供してください。手書きのメモ、署名、日付、金額などの重要な詳細は、簡潔さのために省略せず、記載されているとおりにすべて含めてください。',
+              },
+            },
+          },
+          {
+            id: '4',
+            name: 'Extract Key Information',
+            prompt: 'Extract the most important information from this document in a structured format.',
+            isTemplate: true,
+            translations: {
+              ja: {
+                name: '重要な情報を抽出',
+                prompt: 'このドキュメントから最も重要な情報を構造化された形式で抽出してください。',
+              },
+            },
+          },
         ],
         custom: [],
       };

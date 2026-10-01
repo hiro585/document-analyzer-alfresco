@@ -1,6 +1,7 @@
 import axios from 'axios';
+import type { Document } from '../types';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -11,53 +12,66 @@ const client = axios.create({
 
 export interface UploadResponse {
   success: boolean;
-  document: any;
+  document: Document;
 }
 
-export interface SearchResults {
-  results: any[];
+export interface ChatSource {
+  id: string;
+  filename: string;
+  fileType: string;
+  summary: string;
 }
 
 export interface ChatResponse {
   response: string;
+  sources: ChatSource[];
 }
 
 export const api = {
-  uploadFile: async (file: File, prompt: string): Promise<UploadResponse> => {
+  uploadFile: async (
+    file: File,
+    prompt: string,
+    language: string = 'en',
+    agentIds: string[] = [],
+    referenceFile?: File | null,
+  ): Promise<UploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('prompt', prompt);
-    return client.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data);
+    formData.append('language', language);
+    formData.append('agentIds', JSON.stringify(agentIds));
+    if (referenceFile) {
+      formData.append('referenceFile', referenceFile);
+    }
+    return client
+      .post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then(r => r.data);
   },
 
-  listDocuments: async () => {
+  listDocuments: async (): Promise<Document[]> => {
     return client.get('/documents').then(r => r.data);
   },
 
-  getDocument: async (id: string) => {
+  getDocument: async (id: string): Promise<Document> => {
     return client.get(`/documents/${id}`).then(r => r.data);
+  },
+
+  getDocumentFileUrl: (id: string): string => {
+    return `${API_BASE_URL}/documents/${id}/file`;
   },
 
   deleteDocument: async (id: string) => {
     return client.delete(`/documents/${id}`).then(r => r.data);
   },
 
-  search: async (query: string): Promise<SearchResults> => {
-    return client.post('/search', { query }).then(r => r.data);
+  chat: async (query: string, language: string = 'en'): Promise<ChatResponse> => {
+    return client.post('/llm/chat', { query, language }).then(r => r.data);
   },
 
-  chat: async (query: string): Promise<ChatResponse> => {
-    return client.post('/llm/chat', { query }).then(r => r.data);
-  },
-
-  getPrompts: async () => {
-    return client.get('/prompts').then(r => r.data);
-  },
-
-  savePrompt: async (name: string, prompt: string) => {
-    return client.post('/prompts', { name, prompt }).then(r => r.data);
+  getPrompts: async (language: string = 'en') => {
+    return client.get('/prompts', { params: { language } }).then(r => r.data);
   },
 
   // Alfresco operations

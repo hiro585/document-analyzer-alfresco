@@ -38,7 +38,7 @@ export function createAlfrescoExportRouter(storage: StorageService) {
 
     if (!baseUrl || !username || !password) {
       throw new Error(
-        'Missing Alfresco configuration. Please set ALFRESCO_URL, ALFRESCO_USERNAME, and ALFRESCO_PASSWORD in .env file'
+        'Missing Alfresco configuration. Please set ALFRESCO_URL, ALFRESCO_USERNAME, and ALFRESCO_PASSWORD in .env file',
       );
     }
 
@@ -177,7 +177,7 @@ export function createAlfrescoExportRouter(storage: StorageService) {
       res.json({
         success: true,
         count: documents.length,
-        documents: documents.map((entry: any) => ({
+        documents: documents.map(entry => ({
           id: entry.entry.id,
           name: entry.entry.name,
           createdAt: entry.entry.createdAt,

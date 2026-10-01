@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface UploadZoneProps {
   onFilesSelected: (files: File[]) => void;
@@ -6,6 +7,7 @@ interface UploadZoneProps {
 }
 
 export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesSelected, disabled }) => {
+  const { t } = useLanguage();
   const [isDragActive, setIsDragActive] = useState(false);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -20,9 +22,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesSelected, disable
     setIsDragActive(false);
     if (disabled) return;
 
-    const files = Array.from(e.dataTransfer.files).filter(file =>
-      ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'text/plain'].includes(file.type) ||
-      file.name.endsWith('.txt')
+    const files = Array.from(e.dataTransfer.files).filter(
+      file =>
+        ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'text/plain'].includes(file.type) ||
+        file.name.endsWith('.txt'),
     );
     if (files.length > 0) onFilesSelected(files);
   };
@@ -57,9 +60,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesSelected, disable
       <label htmlFor="file-input" className="block cursor-pointer">
         <div className="text-4xl mb-2">📄</div>
         <p className="text-lg font-semibold text-gray-700 mb-1">
-          {isDragActive ? 'Drop files here' : 'Drag & drop your files here'}
+          {isDragActive ? t('uploadzone.drag') : t('uploadzone.drag')}
         </p>
-        <p className="text-sm text-gray-500">or click to select (PDF, JPG, PNG, TXT)</p>
+        <p className="text-sm text-gray-500">
+          {t('uploadzone.or')} {t('uploadzone.click')} (PDF, JPG, PNG, TXT)
+        </p>
       </label>
     </div>
   );

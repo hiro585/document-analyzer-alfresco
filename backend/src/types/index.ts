@@ -6,8 +6,22 @@ export interface Document {
   extractedData: Record<string, any>;
   fileType: 'pdf' | 'image' | 'text';
   keywords: string[];
+  language?: 'en' | 'ja';
   alfrescoNodeId?: string;
   alfrescoExportedAt?: string;
+  evaluations?: AgentEvaluation[];
+  extractedText?: string;
+  ocrUsed?: boolean;
+}
+
+export interface AgentEvaluation {
+  agentId: string;
+  agentName: string;
+  status: 'pass' | 'issues_found' | 'error';
+  summary: string;
+  findings: string[];
+  evaluatedAt: string;
+  relatedDocuments?: { id: string; filename: string; score: number }[];
 }
 
 export interface ExtractedData {
@@ -19,6 +33,12 @@ export interface Prompt {
   name: string;
   prompt: string;
   isTemplate?: boolean;
+  translations?: {
+    ja?: {
+      name: string;
+      prompt: string;
+    };
+  };
 }
 
 export interface PromptStore {

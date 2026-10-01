@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import { PORT } from './config/env.js';
 import express from 'express';
 import * as path from 'path';
 import * as url from 'url';
@@ -8,18 +8,13 @@ import { SearchService } from './services/search.js';
 import { OllamaService } from './services/ollama.js';
 import { createUploadRouter } from './routes/upload.js';
 import { createDocumentsRouter } from './routes/documents.js';
-import { createSearchRouter } from './routes/search.js';
 import { createPromptsRouter } from './routes/prompts.js';
 import { createLLMRouter } from './routes/llm.js';
 import { createAlfrescoExportRouter } from './routes/alfresco-export.js';
 
-dotenv.config();
-
-const __filename = url.fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const app = express();
-const PORT = 3001;
 const DATA_DIR = path.join(__dirname, '..', 'data');
 
 // Middleware
@@ -35,14 +30,13 @@ app.use((req, res, next) => {
 
 // Initialize services
 const storage = new StorageService(DATA_DIR);
-const fileProcessor = new FileProcessor();
-const search = new SearchService(storage);
 const ollama = new OllamaService();
+const fileProcessor = new FileProcessor(ollama);
+const search = new SearchService(storage);
 
 // Routes
-app.use('/api/upload', createUploadRouter(storage, fileProcessor, ollama));
+app.use('/api/upload', createUploadRouter(storage, fileProcessor, ollama, search));
 app.use('/api/documents', createDocumentsRouter(storage));
-app.use('/api/search', createSearchRouter(search));
 app.use('/api/prompts', createPromptsRouter(storage));
 app.use('/api/llm', createLLMRouter(storage, search, ollama));
 app.use('/api/alfresco', createAlfrescoExportRouter(storage));
@@ -64,7 +58,7 @@ async function start() {
       console.log(`Using LLM model: ${model}`);
     } catch (error) {
       console.error('Ollama not available - make sure Ollama is running');
-      console.error('Download Ollama from https://ollama.ai and run: ollama run llava');
+      console.error('Download Ollama from https://ollama.com and run: ollama pull gemma3');
     }
 
     app.listen(PORT, () => {

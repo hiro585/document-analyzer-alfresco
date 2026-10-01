@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { StorageService } from '../services/storage.js';
+import { getLanguageFromRequest, translatePrompts } from '../utils/systemPrompt.js';
 
 export function createPromptsRouter(storage: StorageService): Router {
   const router = Router();
@@ -8,7 +9,17 @@ export function createPromptsRouter(storage: StorageService): Router {
   router.get('/', async (req, res) => {
     try {
       const prompts = await storage.loadPrompts();
-      res.json(prompts);
+
+      // Get language from query parameter or body
+      const language = getLanguageFromRequest(req.query || req.body);
+
+      // Translate prompts to requested language
+      const translatedPrompts = {
+        templates: translatePrompts(prompts.templates, language),
+        custom: translatePrompts(prompts.custom, language),
+      };
+
+      res.json(translatedPrompts);
     } catch (error) {
       res.status(500).json({ error: 'Failed to load prompts' });
     }

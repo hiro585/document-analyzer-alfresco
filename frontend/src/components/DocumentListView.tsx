@@ -1,10 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { Document } from '../types';
 
 interface DocumentListViewProps {
-  documents: any[];
+  documents: Document[];
   onDelete?: (id: string) => void;
-  onClick?: (doc: any) => void;
+  onClick?: (doc: Document) => void;
 }
 
 export const DocumentListView: React.FC<DocumentListViewProps> = ({ documents, onDelete, onClick }) => {
@@ -45,11 +46,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({ documents, o
         </thead>
         <tbody className="divide-y divide-gray-100">
           {documents.map(doc => (
-            <tr
-              key={doc.id}
-              className="hover:bg-gray-50 cursor-pointer"
-              onClick={() => onClick?.(doc)}
-            >
+            <tr key={doc.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => onClick?.(doc)}>
               <td className="px-4 py-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-lg">{getFileIcon(doc.fileType)}</span>

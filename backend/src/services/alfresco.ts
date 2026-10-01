@@ -3,6 +3,31 @@ import FormData from 'form-data';
 import * as fs from 'fs';
 import { Document } from '../types/index.js';
 
+export interface AlfrescoNodeEntry {
+  entry: {
+    id: string;
+    name: string;
+    createdAt: string;
+    modifiedAt: string;
+    folderId?: string;
+  };
+}
+
+export interface AlfrescoExportResult {
+  success: boolean;
+  nodeId: string;
+  filename: string;
+  location: string;
+  message: string;
+}
+
+function describeError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    return `${error.response?.status ?? 'N/A'} ${error.response?.statusText || error.message}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export interface AlfrescoConfig {
   baseUrl: string;
   username: string;
@@ -29,7 +54,6 @@ export class AlfrescoService {
       // Create Basic Auth header
       const auth = Buffer.from(`${this.username}:${this.password}`).toString('base64');
       this.token = auth;
-      console.log('✓ Authenticated with Alfresco using Basic Auth');
       return this.token;
     } catch (error) {
       console.error('Alfresco authentication error:', error);
@@ -47,12 +71,12 @@ export class AlfrescoService {
       }
       const response = await axios.get(`${this.baseUrl}/nodes/-root-`, {
         headers: {
-          'Authorization': `Basic ${this.token}`,
+          Authorization: `Basic ${this.token}`,
         },
       });
       return response.status === 200;
     } catch (error) {
-      console.error('Connection test failed:', error);
+      console.error('Alfresco connection test failed:', describeError(error));
       return false;
     }
   }
@@ -67,18 +91,15 @@ export class AlfrescoService {
       }
 
       // Get all containers for the demo site
-      const response = await axios.get(
-        `${this.baseUrl}/sites/demo/containers`,
-        {
-          headers: {
-            'Authorization': `Basic ${this.token}`,
-          },
-        }
-      );
+      const response = await axios.get(`${this.baseUrl}/sites/demo/containers`, {
+        headers: {
+          Authorization: `Basic ${this.token}`,
+        },
+      });
 
       // Find the documentLibrary container
       const docLibrary = response.data.list.entries.find(
-        (entry: any) => entry.entry.folderId === 'documentLibrary'
+        (entry: AlfrescoNodeEntry) => entry.entry.folderId === 'documentLibrary',
       );
 
       if (docLibrary) {
@@ -95,7 +116,7 @@ export class AlfrescoService {
   /**
    * Store actual binary file to demo site with extracted data as properties
    */
-  async storeDocumentData(document: Document, filePath: string): Promise<any> {
+  async storeDocumentData(document: Document, filePath: string): Promise<AlfrescoExportResult> {
     try {
       if (!this.token) {
         await this.authenticate();
@@ -103,18 +124,14 @@ export class AlfrescoService {
 
       // Get demo site document library
       const docLibraryId = await this.getDemoSiteDocumentLibrary();
-      console.log(`✓ Found demo site document library: ${docLibraryId}`);
 
       // Read the binary file synchronously
       const fileContent = fs.readFileSync(filePath);
 
       // Get file extension
-      const fileExt = document.filename.lastIndexOf('.') > -1
-        ? document.filename.substring(document.filename.lastIndexOf('.'))
-        : '';
-      const baseName = fileExt
-        ? document.filename.substring(0, document.filename.lastIndexOf('.'))
-        : document.filename;
+      const fileExt =
+        document.filename.lastIndexOf('.') > -1 ? document.filename.substring(document.filename.lastIndexOf('.')) : '';
+      const baseName = fileExt ? document.filename.substring(0, document.filename.lastIndexOf('.')) : document.filename;
 
       // Create unique filename with timestamp
       const timestamp = Date.now();
@@ -131,33 +148,31 @@ export class AlfrescoService {
         {
           headers: {
             ...formData.getHeaders(),
-            'Authorization': `Basic ${this.token}`,
+            Authorization: `Basic ${this.token}`,
           },
-        }
+        },
       );
 
       const nodeId = uploadResponse.data.entry?.id;
       if (!nodeId) {
-        console.error('✗ No node ID returned from upload:', uploadResponse.data);
+        console.error('No node ID returned from upload:', uploadResponse.data);
         throw new Error('File uploaded but no node ID returned');
       }
 
-      console.log(`✓ Uploaded file to demo site: ${nodeId}`);
-
-      // Prepare properties with JSON metadata
-
-      console.log(`Updating cm:title and cm:description for node ${nodeId}...`);
-
-      // Prepare simplified properties using standard Alfresco fields
-      const simpleProperties: any = {
+      // Store the extracted data as JSON in standard Alfresco fields
+      const simpleProperties = {
         'cm:title': document.filename,
-        'cm:description': JSON.stringify({
-          uploadedAt: document.uploadedAt,
-          originalPrompt: document.originalPrompt,
-          extractedData: document.extractedData,
-          fileType: document.fileType,
-          keywords: document.keywords,
-        }, null, 2),
+        'cm:description': JSON.stringify(
+          {
+            uploadedAt: document.uploadedAt,
+            originalPrompt: document.originalPrompt,
+            extractedData: document.extractedData,
+            fileType: document.fileType,
+            keywords: document.keywords,
+          },
+          null,
+          2,
+        ),
       };
 
       // Update node properties
@@ -168,19 +183,16 @@ export class AlfrescoService {
           {
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Basic ${this.token}`,
+              Authorization: `Basic ${this.token}`,
             },
-          }
+          },
         );
 
-        if (updateResponse.status === 200) {
-          console.log(`✓ Updated cm:title and cm:description for node: ${nodeId}`);
-          console.log(`✓ Description set with JSON metadata`);
-        } else {
-          console.warn(`⚠ Update response status: ${updateResponse.status}`);
+        if (updateResponse.status !== 200) {
+          console.warn(`Unexpected status updating properties for ${nodeId}: ${updateResponse.status}`);
         }
-      } catch (updateErr: any) {
-        console.error(`✗ Failed to update properties for ${nodeId}:`, updateErr.response?.status, updateErr.message);
+      } catch (updateErr) {
+        console.error(`Failed to update properties for ${nodeId}:`, describeError(updateErr));
       }
 
       return {
@@ -190,31 +202,11 @@ export class AlfrescoService {
         location: `demo site document library`,
         message: 'File exported to demo site with metadata properties',
       };
-    } catch (error: any) {
-      console.error('Error storing document in Alfresco:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Upload content to an existing node
-   */
-  private async uploadContent(nodeId: string, content: string): Promise<void> {
-    try {
-      await axios.put(
-        `${this.baseUrl}/nodes/${nodeId}/content`,
-        content,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Basic ${this.token}`,
-          },
-        }
-      );
-
-      console.log(`✓ Uploaded content to node: ${nodeId}`);
     } catch (error) {
-      console.error('Error uploading content:', error);
+      console.error(
+        'Error storing document in Alfresco:',
+        axios.isAxiosError(error) ? (error.response?.data ?? error.message) : error,
+      );
       throw error;
     }
   }
@@ -222,20 +214,17 @@ export class AlfrescoService {
   /**
    * Get all stored documents from Alfresco
    */
-  async listDocuments(): Promise<any[]> {
+  async listDocuments(): Promise<AlfrescoNodeEntry[]> {
     try {
       if (!this.token) {
         await this.authenticate();
       }
 
-      const response = await axios.get(
-        `${this.baseUrl}/nodes/-root-/children?maxItems=100`,
-        {
-          headers: {
-            'Authorization': `Basic ${this.token}`,
-          },
-        }
-      );
+      const response = await axios.get(`${this.baseUrl}/nodes/-root-/children?maxItems=100`, {
+        headers: {
+          Authorization: `Basic ${this.token}`,
+        },
+      });
 
       return response.data.list.entries;
     } catch (error) {
@@ -247,7 +236,7 @@ export class AlfrescoService {
   /**
    * Get document metadata from Alfresco
    */
-  async getDocument(nodeId: string): Promise<any> {
+  async getDocument(nodeId: string): Promise<AlfrescoNodeEntry['entry']> {
     try {
       if (!this.token) {
         await this.authenticate();
@@ -255,7 +244,7 @@ export class AlfrescoService {
 
       const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}`, {
         headers: {
-          'Authorization': `Basic ${this.token}`,
+          Authorization: `Basic ${this.token}`,
         },
       });
 
@@ -277,11 +266,9 @@ export class AlfrescoService {
 
       await axios.delete(`${this.baseUrl}/nodes/${nodeId}`, {
         headers: {
-          'Authorization': `Basic ${this.token}`,
+          Authorization: `Basic ${this.token}`,
         },
       });
-
-      console.log(`✓ Deleted document: ${nodeId}`);
     } catch (error) {
       console.error('Error deleting document:', error);
       throw error;

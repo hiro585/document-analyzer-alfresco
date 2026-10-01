@@ -7,7 +7,7 @@
   <!-- Navigation Tabs -->
   <string key="nav.upload" en="📤 Upload" ja="📤 アップロード" />
   <string key="nav.documents" en="📚 Documents" ja="📚 ドキュメント" />
-  <string key="nav.search" en="🔍 Search and Chat" ja="🔍 検索 and チャット" />
+  <string key="nav.search" en="💬 Chat" ja="💬 チャット" />
 
   <!-- Language Selector -->
   <string key="lang.selector" en="Language" ja="言語" />
@@ -53,6 +53,8 @@
   <string key="documents.delete" en="🗑️ Delete" ja="🗑️ 削除" />
   <string key="documents.delete.confirm" en="Are you sure you want to delete this document?" ja="このドキュメントを削除してもよろしいですか?" />
   <string key="documents.delete.loading" en="Deleting..." ja="削除中..." />
+  <string key="documents.list.collapse" en="Hide document list" ja="ドキュメント一覧を非表示" />
+  <string key="documents.list.expand" en="Show document list" ja="ドキュメント一覧を表示" />
   <string key="documents.view.thumbnail" en="Thumbnail view" ja="サムネイル表示" />
   <string key="documents.view.list" en="List view" ja="リスト表示" />
   <string key="documents.list.type" en="Type" ja="種類" />
@@ -61,6 +63,9 @@
   <string key="documents.list.status" en="Status" ja="ステータス" />
   <string key="documents.list.actions" en="Actions" ja="操作" />
   <string key="documents.list.alfresco" en="In Alfresco" ja="Alfresco登録済" />
+  <string key="documents.preview.open" en="🔗 Open original file" ja="🔗 元のファイルを開く" />
+  <string key="documents.search.placeholder" en="Search documents by name, keyword, or content..." ja="ファイル名、キーワード、内容で検索..." />
+  <string key="documents.search.no_results" en="No documents match your search" ja="検索に一致するドキュメントがありません" />
 
   <!-- Document Card -->
   <string key="document.id" en="ID:" ja="ID:" />
@@ -69,23 +74,41 @@
   <string key="document.data" en="Extracted Data:" ja="抽出されたデータ:" />
 
   <!-- Search Page -->
-  <string key="search.heading" en="🔍 Search and Chat" ja="🔍 検索 and チャット" />
+  <string key="search.heading" en="💬 Chat" ja="💬 チャット" />
   <string key="search.query_placeholder" en="Enter search query or question..." ja="検索クエリまたは質問を入力..." />
-  <string key="search.search_button" en="🔍 Search" ja="🔍 検索" />
-  <string key="search.loading" en="Searching..." ja="検索中..." />
-  <string key="search.error" en="Search failed" ja="検索に失敗しました" />
-  <string key="search.no_results" en="No results found" ja="結果が見つかりません" />
-  <string key="search.chat_placeholder" en="Ask a question about the search results..." ja="検索結果について質問..." />
+  <string key="search.chat_placeholder" en="Ask a question about your documents..." ja="ドキュメントについて質問..." />
   <string key="search.send" en="📤 Send" ja="📤 送信" />
   <string key="search.chat_loading" en="🤖 Thinking..." ja="🤖 考え中..." />
 
   <!-- Chat Panel -->
-  <string key="chat.empty" en="No messages yet. Search for documents to start chatting!" ja="メッセージがありません。ドキュメントを検索してチャットを開始します！" />
+  <string key="chat.empty" en="No messages yet. Ask a question to get started!" ja="メッセージがありません。質問を入力して開始してください！" />
   <string key="chat.user" en="You" ja="あなた" />
   <string key="chat.assistant" en="Assistant" ja="アシスタント" />
+  <string key="chat.sources" en="📎 Sources" ja="📎 参照元" />
 
   <!-- Footer -->
   <string key="footer.ollama" en="💡 Make sure Ollama is running:" ja="💡 Ollamaが実行中であることを確認:" />
+
+  <!-- AI Agents -->
+  <string key="agents.label" en="AI Agents (optional):" ja="AIエージェント（任意）:" />
+  <string key="agent.fraud_detection.name" en="Fraud Detection Agent" ja="不正検出エージェント" />
+  <string key="agent.fraud_detection.description" en="Checks the document for wrongful, falsified, or suspicious information." ja="ドキュメントに不正、改ざん、または疑わしい情報がないか確認します。" />
+  <string key="agent.missing_info.name" en="Missing Information Check Agent" ja="欠落情報チェックエージェント" />
+  <string key="agent.missing_info.description" en="Checks the document for missing or incomplete required entries." ja="ドキュメントに欠落または不完全な必須項目がないか確認します。" />
+  <string key="agent.similar_documents.name" en="Similar Document Check Agent" ja="類似ドキュメントチェックエージェント" />
+  <string key="agent.similar_documents.description" en="Searches already-uploaded documents for similar or duplicate content, using keyword/text overlap (no AI model call)." ja="キーワード・テキストの一致度に基づき、既にアップロード済みのドキュメントの中から類似または重複する内容を検索します（AIモデルは使用しません）。" />
+  <string key="agent.record_match.name" en="Record Match Agent" ja="レコード照合エージェント" />
+  <string key="agent.record_match.description" en="Checks whether the extracted data matches a record in an uploaded reference list (e.g. a registration list). Requires uploading a CSV/TXT reference file." ja="抽出されたデータが、アップロードされた参照リスト（例：登録リスト）内のレコードと一致するかを確認します。CSV・TXTの参照ファイルのアップロードが必要です。" />
+  <string key="agents.results.heading" en="🤖 AI Agent Evaluations" ja="🤖 AIエージェント評価" />
+  <string key="agents.results.issues_badge" en="Agent flagged issues" ja="エージェントが問題を検出しました" />
+  <string key="agents.results.match" en="match" ja="一致" />
+  <string key="agents.reference_file.label" en="Reference file (CSV/TXT) — required" ja="参照ファイル（CSV・TXT）— 必須" />
+  <string key="agents.reference_file.required" en="Please upload a reference CSV/TXT file to run this agent" ja="このエージェントを実行するには、参照用のCSV・TXTファイルをアップロードしてください" />
+
+  <!-- OCR / Extracted Text -->
+  <string key="ocr.heading" en="📄 View OCR / Extracted Text" ja="📄 OCR・抽出テキストを表示" />
+  <string key="ocr.badge" en="AI vision used" ja="AIビジョン使用" />
+  <string key="ocr.notice" en="This document had no embedded text layer, so this text was read from each page image by the AI vision model (including handwriting). Accuracy may vary for difficult handwriting." ja="このドキュメントには埋め込みテキスト層がなかったため、AIビジョンモデルが各ページ画像からこのテキストを読み取りました（手書きを含む）。判読が難しい手書き文字は精度が変動することがあります。" />
 
   <!-- Prompt Templates -->
   <string key="prompt.template.1.name" en="Extract Numbers" ja="数字を抽出" />
@@ -95,7 +118,7 @@
   <string key="prompt.template.2.text" en="Find and extract all names of people and organizations mentioned in this document." ja="このドキュメントで言及されている人々と組織のすべての名前を検索して抽出してください。" />
 
   <string key="prompt.template.3.name" en="Summarize Document" ja="ドキュメントを要約" />
-  <string key="prompt.template.3.text" en="Provide a concise summary of the main content of this document." ja="このドキュメントの主な内容の簡潔な要約を提供してください。" />
+  <string key="prompt.template.3.text" en="Provide a concise summary of the main content of this document. Include all key details exactly as written, including handwritten notes, signatures, dates, and amounts — do not omit them for the sake of brevity." ja="このドキュメントの主な内容の簡潔な要約を提供してください。手書きのメモ、署名、日付、金額などの重要な詳細は、簡潔さのために省略せず、記載されているとおりにすべて含めてください。" />
 
   <string key="prompt.template.4.name" en="Extract Key Information" ja="重要な情報を抽出" />
   <string key="prompt.template.4.text" en="Extract the most important information from this document in a structured format." ja="このドキュメントから最も重要な情報を構造化された形式で抽出してください。" />

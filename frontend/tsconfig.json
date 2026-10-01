@@ -10,7 +10,8 @@
     "allowSyntheticDefaultImports": true,
     "jsx": "react-jsx",
     "sourceMap": true,
-    "noEmit": true
+    "noEmit": true,
+    "strict": true
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

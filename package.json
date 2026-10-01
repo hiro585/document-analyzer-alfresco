@@ -4,12 +4,15 @@
   "description": "Local AI document analysis web app",
   "private": true,
   "scripts": {
-    "install": "npm install --prefix backend && npm install --prefix frontend",
+    "setup": "npm install --prefix backend && npm install --prefix frontend",
     "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
-    "start": "npm start --prefix backend"
+    "start": "npm start --prefix backend",
+    "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx,css}\""
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "prettier": "^3.9.9"
   }
 }

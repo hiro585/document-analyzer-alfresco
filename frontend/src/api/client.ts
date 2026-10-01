@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Document } from '../types';
+import type { AlfrescoDocument, Document } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -25,6 +25,27 @@ export interface ChatSource {
 export interface ChatResponse {
   response: string;
   sources: ChatSource[];
+}
+
+export interface AlfrescoStatus {
+  configured: boolean;
+  connected: boolean;
+  site?: string;
+  error?: string;
+}
+
+export interface AlfrescoDocumentPage {
+  documents: AlfrescoDocument[];
+  totalItems: number;
+  page: number;
+  pageSize: number;
+  site: string;
+}
+
+// What an Alfresco chat question covers; neither field means the whole site.
+export interface AlfrescoChatScope {
+  nodeIds?: string[];
+  searchQuery?: string;
 }
 
 export const api = {
@@ -66,8 +87,9 @@ export const api = {
     return client.delete(`/documents/${id}`).then(r => r.data);
   },
 
-  chat: async (query: string, language: string = 'en'): Promise<ChatResponse> => {
-    return client.post('/llm/chat', { query, language }).then(r => r.data);
+  // documentIds limits the chat to those documents; omit it to search all documents.
+  chat: async (query: string, language: string = 'en', documentIds?: string[]): Promise<ChatResponse> => {
+    return client.post('/llm/chat', { query, language, documentIds }).then(r => r.data);
   },
 
   getPrompts: async (language: string = 'en') => {
@@ -89,5 +111,30 @@ export const api = {
 
   listAlfrescoDocuments: async () => {
     return client.get('/alfresco/list').then(r => r.data);
+  },
+
+  // Alfresco browsing (read-only, limited to the configured site's document library)
+  getAlfrescoStatus: async (): Promise<AlfrescoStatus> => {
+    return client.get('/alfresco/status').then(r => r.data);
+  },
+
+  searchAlfrescoDocuments: async (query: string, page: number, pageSize: number): Promise<AlfrescoDocumentPage> => {
+    return client.get('/alfresco/documents', { params: { query, page, pageSize } }).then(r => r.data);
+  },
+
+  getAlfrescoDocument: async (nodeId: string): Promise<AlfrescoDocument> => {
+    return client.get(`/alfresco/documents/${nodeId}`).then(r => r.data);
+  },
+
+  getAlfrescoDocumentContentUrl: (nodeId: string): string => {
+    return `${API_BASE_URL}/alfresco/documents/${nodeId}/content`;
+  },
+
+  chatAlfresco: async (
+    query: string,
+    language: string = 'en',
+    scope: AlfrescoChatScope = {},
+  ): Promise<ChatResponse> => {
+    return client.post('/alfresco/chat', { query, language, ...scope }).then(r => r.data);
   },
 };

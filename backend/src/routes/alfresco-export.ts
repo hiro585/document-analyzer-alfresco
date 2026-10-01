@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as url from 'url';
 import * as fs from 'fs/promises';
 import { StorageService } from '../services/storage.js';
-import { AlfrescoService, AlfrescoConfig } from '../services/alfresco.js';
+import { AlfrescoService, AlfrescoConfig, loadAlfrescoConfig } from '../services/alfresco.js';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,17 +32,13 @@ export function createAlfrescoExportRouter(storage: StorageService) {
 
   // Get Alfresco configuration from environment variables
   const getAlfrescoConfig = (): AlfrescoConfig => {
-    const baseUrl = process.env.ALFRESCO_URL;
-    const username = process.env.ALFRESCO_USERNAME;
-    const password = process.env.ALFRESCO_PASSWORD;
-
-    if (!baseUrl || !username || !password) {
+    const config = loadAlfrescoConfig();
+    if (!config) {
       throw new Error(
         'Missing Alfresco configuration. Please set ALFRESCO_URL, ALFRESCO_USERNAME, and ALFRESCO_PASSWORD in .env file',
       );
     }
-
-    return { baseUrl, username, password };
+    return config;
   };
 
   /**

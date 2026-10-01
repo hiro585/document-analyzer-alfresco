@@ -11,6 +11,7 @@ import { createDocumentsRouter } from './routes/documents.js';
 import { createPromptsRouter } from './routes/prompts.js';
 import { createLLMRouter } from './routes/llm.js';
 import { createAlfrescoExportRouter } from './routes/alfresco-export.js';
+import { createAlfrescoDocumentsRouter } from './routes/alfresco-documents.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -40,6 +41,7 @@ app.use('/api/documents', createDocumentsRouter(storage));
 app.use('/api/prompts', createPromptsRouter(storage));
 app.use('/api/llm', createLLMRouter(storage, search, ollama));
 app.use('/api/alfresco', createAlfrescoExportRouter(storage));
+app.use('/api/alfresco', createAlfrescoDocumentsRouter(search, ollama));
 
 // Health check
 app.get('/api/health', (req, res) => {

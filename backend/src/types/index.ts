@@ -14,6 +14,28 @@ export interface Document {
   ocrUsed?: boolean;
 }
 
+// A document from the configured Alfresco site, in the same shape as a local
+// document. For documents exported by this app, extractedData/keywords come
+// from the JSON stored in cm:description; for others they're empty.
+export interface AlfrescoDocument extends Document {
+  alfresco: {
+    nodeId: string;
+    name: string;
+    path?: string;
+    mimeType?: string;
+    sizeInBytes?: number;
+    createdBy?: string;
+    modifiedAt: string;
+    modifiedBy?: string;
+    // Plain cm:description, when it isn't this app's exported JSON
+    description?: string;
+    exportedByApp: boolean;
+    // Matching excerpt of the content from the last search
+    snippet?: string;
+    shareUrl?: string;
+  };
+}
+
 export interface AgentEvaluation {
   agentId: string;
   agentName: string;

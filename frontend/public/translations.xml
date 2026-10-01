@@ -6,8 +6,8 @@
 
   <!-- Navigation Tabs -->
   <string key="nav.upload" en="📤 Upload" ja="📤 アップロード" />
-  <string key="nav.documents" en="📚 Documents" ja="📚 ドキュメント" />
-  <string key="nav.search" en="💬 Chat" ja="💬 チャット" />
+  <string key="nav.documents" en="📚 Documents (Local)" ja="📚 ドキュメント（ローカル）" />
+  <string key="nav.alfresco" en="🗄️ Documents (Alfresco)" ja="🗄️ ドキュメント（Alfresco）" />
 
   <!-- Language Selector -->
   <string key="lang.selector" en="Language" ja="言語" />
@@ -66,6 +66,42 @@
   <string key="documents.preview.open" en="🔗 Open original file" ja="🔗 元のファイルを開く" />
   <string key="documents.search.placeholder" en="Search documents by name, keyword, or content..." ja="ファイル名、キーワード、内容で検索..." />
   <string key="documents.search.no_results" en="No documents match your search" ja="検索に一致するドキュメントがありません" />
+  <string key="documents.search.clear" en="Clear search" ja="検索をクリア" />
+  <string key="documents.search.count" en="{count} of {total} documents match" ja="{total}件中{count}件が一致" />
+  <string key="documents.count" en="{total} documents" ja="{total}件のドキュメント" />
+  <string key="documents.select" en="Select for chat" ja="チャットの対象として選択" />
+  <string key="documents.select.page" en="Select all on this page" ja="このページをすべて選択" />
+  <string key="documents.select.all" en="Select all" ja="すべて選択" />
+  <string key="documents.select.results" en="Select all results" ja="検索結果をすべて選択" />
+  <string key="documents.select.clear" en="Clear selection" ja="選択を解除" />
+  <string key="documents.selected_count" en="{count} selected" ja="{count}件選択中" />
+
+  <!-- Alfresco Documents Page -->
+  <string key="alfresco.heading" en="🗄️ Alfresco Documents" ja="🗄️ Alfrescoドキュメント" />
+  <string key="alfresco.site" en="Site: {site} (document library, including subfolders)" ja="サイト: {site}（ドキュメントライブラリ、サブフォルダを含む）" />
+  <string key="alfresco.checking" en="Connecting to Alfresco..." ja="Alfrescoに接続中..." />
+  <string key="alfresco.loading" en="Loading documents from Alfresco..." ja="Alfrescoからドキュメントを読み込み中..." />
+  <string key="alfresco.empty" en="This site's document library has no documents yet" ja="このサイトのドキュメントライブラリにはまだドキュメントがありません" />
+  <string key="alfresco.refresh" en="Refresh documents" ja="ドキュメントを再読み込み" />
+  <string key="alfresco.retry" en="Retry" ja="再試行" />
+  <string key="alfresco.search.placeholder" en="Search Alfresco by name, title, description, or content..." ja="名前、タイトル、説明、内容でAlfrescoを検索..." />
+  <string key="alfresco.error.load" en="Failed to load documents from Alfresco:" ja="Alfrescoからのドキュメントの読み込みに失敗しました:" />
+  <string key="alfresco.not_configured.title" en="Alfresco is not configured" ja="Alfrescoが設定されていません" />
+  <string key="alfresco.not_configured.body" en="To browse Alfresco documents here, add these settings to the .env file in the project root and restart the backend. ALFRESCO_SITE is optional (default: demo)." ja="ここでAlfrescoのドキュメントを表示するには、プロジェクトルートの.envファイルに次の設定を追加して、バックエンドを再起動してください。ALFRESCO_SITEは任意です（既定値: demo）。" />
+  <string key="alfresco.unreachable.title" en="Couldn't connect to Alfresco" ja="Alfrescoに接続できませんでした" />
+  <string key="alfresco.unreachable.body" en="Check that the Alfresco server is running and that the URL, credentials and site in .env are correct." ja="Alfrescoサーバーが起動していること、および.envのURL・認証情報・サイトが正しいことを確認してください。" />
+  <string key="alfresco.open_in_alfresco" en="↗ Open in Alfresco" ja="↗ Alfrescoで開く" />
+  <string key="alfresco.exported_badge" en="Exported from this app" ja="このアプリからエクスポート済み" />
+  <string key="alfresco.detail.created" en="Created:" ja="作成日時:" />
+  <string key="alfresco.detail.modified" en="Modified:" ja="更新日時:" />
+  <string key="alfresco.detail.type" en="Type:" ja="種類:" />
+  <string key="alfresco.detail.size" en="Size:" ja="サイズ:" />
+  <string key="alfresco.detail.name" en="Name in Alfresco:" ja="Alfresco上の名前:" />
+  <string key="alfresco.detail.prompt" en="Extraction Prompt:" ja="抽出プロンプト:" />
+  <string key="alfresco.detail.description" en="Description:" ja="説明:" />
+  <string key="alfresco.detail.snippet" en="Matching text:" ja="一致したテキスト:" />
+  <string key="alfresco.detail.keywords" en="Keywords:" ja="キーワード:" />
+  <string key="alfresco.detail.metadata_only" en="This document wasn't exported by this app, so it has no extracted data. Chat can use its title, description and search excerpt, but not its full content." ja="このドキュメントはこのアプリからエクスポートされたものではないため、抽出データがありません。チャットではタイトル、説明、検索の抜粋を使用できますが、内容全体は使用できません。" />
 
   <!-- Document Card -->
   <string key="document.id" en="ID:" ja="ID:" />
@@ -73,8 +109,7 @@
   <string key="document.uploaded" en="Uploaded:" ja="アップロード:" />
   <string key="document.data" en="Extracted Data:" ja="抽出されたデータ:" />
 
-  <!-- Search Page -->
-  <string key="search.heading" en="💬 Chat" ja="💬 チャット" />
+  <!-- Chat input -->
   <string key="search.query_placeholder" en="Enter search query or question..." ja="検索クエリまたは質問を入力..." />
   <string key="search.chat_placeholder" en="Ask a question about your documents..." ja="ドキュメントについて質問..." />
   <string key="search.send" en="📤 Send" ja="📤 送信" />
@@ -85,9 +120,24 @@
   <string key="chat.user" en="You" ja="あなた" />
   <string key="chat.assistant" en="Assistant" ja="アシスタント" />
   <string key="chat.sources" en="📎 Sources" ja="📎 参照元" />
+  <string key="chat.heading" en="💬 Chat" ja="💬 チャット" />
+  <string key="chat.open" en="Open chat" ja="チャットを開く" />
+  <string key="chat.close" en="Close chat" ja="チャットを閉じる" />
+  <string key="chat.clear" en="Clear conversation" ja="会話をクリア" />
+  <string key="chat.error" en="Sorry, I encountered an error. Make sure Ollama is running." ja="エラーが発生しました。Ollamaが実行中であることを確認してください。" />
+  <string key="chat.empty.hint" en="Tip: search or tick documents first to ask about just those." ja="ヒント：先に検索するかドキュメントにチェックを入れると、その対象だけに質問できます。" />
+  <string key="chat.source.show" en="Show document details" ja="ドキュメントの詳細を表示" />
+  <string key="chat.scope.label" en="Ask about" ja="質問の対象" />
+  <string key="chat.scope.selected" en="Selected" ja="選択中" />
+  <string key="chat.scope.results" en="Search results" ja="検索結果" />
+  <string key="chat.scope.all" en="All" ja="すべて" />
+  <string key="chat.scope.limit_note" en="Each answer uses up to 5 of the most relevant documents." ja="回答ごとに、関連性の高いドキュメントを最大5件使用します。" />
+  <string key="chat.scope.used.selected" en="Asked about {count} selected documents" ja="選択中の{count}件に質問" />
+  <string key="chat.scope.used.results" en="Asked about {count} search results" ja="検索結果{count}件に質問" />
+  <string key="chat.scope.used.all" en="Asked about all documents" ja="すべてのドキュメントに質問" />
 
   <!-- Footer -->
-  <string key="footer.ollama" en="💡 Make sure Ollama is running:" ja="💡 Ollamaが実行中であることを確認:" />
+  <string key="footer.ollama" en="💡 Requires Ollama running locally with at least one model installed. A vision-capable model such as gemma3 is recommended for images and scanned PDFs:" ja="💡 ローカルでOllamaを起動し、モデルを1つ以上インストールしてください。画像やスキャンPDFには、gemma3などの画像対応モデルを推奨します:" />
 
   <!-- AI Agents -->
   <string key="agents.label" en="AI Agents (optional):" ja="AIエージェント（任意）:" />

@@ -1,16 +1,39 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import * as fs from 'fs';
-import { Document } from '../types/index.js';
+import { Readable } from 'stream';
+import { AlfrescoDocument, Document } from '../types/index.js';
 
 export interface AlfrescoNodeEntry {
-  entry: {
-    id: string;
-    name: string;
-    createdAt: string;
-    modifiedAt: string;
-    folderId?: string;
-  };
+  entry: AlfrescoNode;
+}
+
+export interface AlfrescoNode {
+  id: string;
+  name: string;
+  createdAt: string;
+  modifiedAt: string;
+  folderId?: string;
+  createdByUser?: { id: string; displayName: string };
+  modifiedByUser?: { id: string; displayName: string };
+  content?: { mimeType: string; sizeInBytes: number };
+  properties?: Record<string, unknown>;
+  path?: { name: string; elements?: { id: string; name: string }[] };
+  search?: { highlight?: { field: string; snippets: string[] }[] };
+}
+
+export interface AlfrescoSearchResult {
+  documents: AlfrescoDocument[];
+  totalItems: number;
+}
+
+export class AlfrescoError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
 }
 
 export interface AlfrescoExportResult {
@@ -32,18 +55,93 @@ export interface AlfrescoConfig {
   baseUrl: string;
   username: string;
   password: string;
+  // Site whose documentLibrary is used for export and browsing (default "demo")
+  site?: string;
+  // Search API endpoint; derived from baseUrl when omitted
+  searchUrl?: string;
+}
+
+// Reads the Alfresco settings from the environment, or null when they're incomplete.
+export function loadAlfrescoConfig(): AlfrescoConfig | null {
+  const baseUrl = process.env.ALFRESCO_URL;
+  const username = process.env.ALFRESCO_USERNAME;
+  const password = process.env.ALFRESCO_PASSWORD;
+  if (!baseUrl || !username || !password) return null;
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ''),
+    username,
+    password,
+    site: process.env.ALFRESCO_SITE || undefined,
+    searchUrl: process.env.ALFRESCO_SEARCH_URL || undefined,
+  };
+}
+
+// The core API lives at .../public/alfresco/versions/1 and the Search API at
+// .../public/search/versions/1/search on the same server.
+function deriveSearchUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/alfresco\/versions\/\d+$/, '') + '/search/versions/1/search';
+}
+
+// Quotes a value for an AFTS query.
+function aftsQuote(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+const NODE_ID_PATTERN = /^[A-Za-z0-9-]+$/;
+
+function stripHighlightTags(text: string): string {
+  return text
+    .replace(/<\/?em>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toFileType(mimeType: string | undefined): Document['fileType'] {
+  if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType?.startsWith('image/')) return 'image';
+  return 'text';
+}
+
+// Documents exported by this app carry their extraction results as JSON in cm:description.
+function parseExportedDescription(
+  description: unknown,
+): { originalPrompt?: string; extractedData?: Record<string, any>; keywords?: string[] } | null {
+  if (typeof description !== 'string' || !description.trim().startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(description);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.extractedData !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export class AlfrescoService {
   private baseUrl: string;
   private username: string;
   private password: string;
+  private site: string;
+  private searchUrl: string;
   private token: string | null = null;
+  private docLibraryId: string | null = null;
 
   constructor(config: AlfrescoConfig) {
     this.baseUrl = config.baseUrl;
     this.username = config.username;
     this.password = config.password;
+    this.site = config.site || 'demo';
+    this.searchUrl = config.searchUrl || deriveSearchUrl(config.baseUrl);
+  }
+
+  get siteId(): string {
+    return this.site;
+  }
+
+  private async authHeaders(): Promise<Record<string, string>> {
+    if (!this.token) {
+      await this.authenticate();
+    }
+    return { Authorization: `Basic ${this.token}` };
   }
 
   /**
@@ -82,19 +180,14 @@ export class AlfrescoService {
   }
 
   /**
-   * Get demo site document library node ID
+   * Get the configured site's document library node ID
    */
-  async getDemoSiteDocumentLibrary(): Promise<string> {
+  async getSiteDocumentLibrary(): Promise<string> {
+    if (this.docLibraryId) return this.docLibraryId;
     try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-
-      // Get all containers for the demo site
-      const response = await axios.get(`${this.baseUrl}/sites/demo/containers`, {
-        headers: {
-          Authorization: `Basic ${this.token}`,
-        },
+      // Get all containers for the site
+      const response = await axios.get(`${this.baseUrl}/sites/${encodeURIComponent(this.site)}/containers`, {
+        headers: await this.authHeaders(),
       });
 
       // Find the documentLibrary container
@@ -103,12 +196,13 @@ export class AlfrescoService {
       );
 
       if (docLibrary) {
-        return docLibrary.entry.id;
+        this.docLibraryId = docLibrary.entry.id as string;
+        return this.docLibraryId;
       } else {
-        throw new Error('Document library not found for demo site');
+        throw new Error(`Document library not found for site "${this.site}"`);
       }
     } catch (error) {
-      console.error('Error getting demo site document library:', error);
+      console.error(`Error getting document library for site "${this.site}":`, describeError(error));
       throw error;
     }
   }
@@ -122,8 +216,8 @@ export class AlfrescoService {
         await this.authenticate();
       }
 
-      // Get demo site document library
-      const docLibraryId = await this.getDemoSiteDocumentLibrary();
+      // Get the site's document library
+      const docLibraryId = await this.getSiteDocumentLibrary();
 
       // Read the binary file synchronously
       const fileContent = fs.readFileSync(filePath);
@@ -199,8 +293,8 @@ export class AlfrescoService {
         success: true,
         nodeId: nodeId,
         filename: document.filename,
-        location: `demo site document library`,
-        message: 'File exported to demo site with metadata properties',
+        location: `${this.site} site document library`,
+        message: `File exported to ${this.site} site with metadata properties`,
       };
     } catch (error) {
       console.error(
@@ -212,18 +306,13 @@ export class AlfrescoService {
   }
 
   /**
-   * Get all stored documents from Alfresco
+   * Get the documents at the top level of the site's document library
    */
   async listDocuments(): Promise<AlfrescoNodeEntry[]> {
     try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-
-      const response = await axios.get(`${this.baseUrl}/nodes/-root-/children?maxItems=100`, {
-        headers: {
-          Authorization: `Basic ${this.token}`,
-        },
+      const docLibraryId = await this.getSiteDocumentLibrary();
+      const response = await axios.get(`${this.baseUrl}/nodes/${docLibraryId}/children?maxItems=100`, {
+        headers: await this.authHeaders(),
       });
 
       return response.data.list.entries;
@@ -231,6 +320,154 @@ export class AlfrescoService {
       console.error('Error listing documents:', error);
       throw error;
     }
+  }
+
+  /**
+   * Search documents anywhere under the site's document library (including
+   * subfolders). With `match: 'any'`, a document matching any term counts,
+   * which suits natural-language chat questions; 'all' suits the search box.
+   */
+  async searchDocuments(options: {
+    query?: string;
+    terms?: string[];
+    match?: 'all' | 'any';
+    skip?: number;
+    maxItems?: number;
+  }): Promise<AlfrescoSearchResult> {
+    const docLibraryId = await this.getSiteDocumentLibrary();
+    const terms = (options.terms ?? (options.query || '').split(/\s+/)).map(t => t.trim()).filter(t => t.length > 0);
+
+    const clauses = [`ANCESTOR:${aftsQuote(`workspace://SpacesStore/${docLibraryId}`)}`, 'TYPE:"cm:content"'];
+    if (terms.length > 0) {
+      const termClauses = terms.map(term => {
+        const q = aftsQuote(term);
+        // cm:name gets a prefix match so partial filenames still find documents
+        return `(cm:name:${aftsQuote(`${term.replace(/[*?]/g, '')}*`)} OR cm:title:${q} OR cm:description:${q} OR TEXT:${q})`;
+      });
+      clauses.push(`(${termClauses.join(options.match === 'any' ? ' OR ' : ' AND ')})`);
+    }
+
+    try {
+      const response = await axios.post(
+        this.searchUrl,
+        {
+          query: { query: clauses.join(' AND '), language: 'afts' },
+          include: ['properties', 'path'],
+          paging: { skipCount: options.skip ?? 0, maxItems: options.maxItems ?? 10 },
+          // Newest first when browsing; by relevance when searching
+          ...(terms.length === 0 ? { sort: [{ type: 'FIELD', field: 'cm:created', ascending: false }] } : {}),
+          highlight: { fields: [{ field: 'cm:content' }], snippetCount: 1, fragmentSize: 160 },
+        },
+        { headers: { ...(await this.authHeaders()), 'Content-Type': 'application/json' } },
+      );
+      const entries: { entry: AlfrescoNode }[] = response.data.list.entries;
+      return {
+        documents: entries.map(e => this.toAppDocument(e.entry)),
+        totalItems: response.data.list.pagination.totalItems ?? entries.length,
+      };
+    } catch (error) {
+      throw this.wrapError(error, 'Alfresco search failed');
+    }
+  }
+
+  /**
+   * Get one document, only if it's inside the site's document library.
+   */
+  async getSiteDocument(nodeId: string): Promise<AlfrescoDocument> {
+    return this.toAppDocument(await this.getSiteNode(nodeId));
+  }
+
+  /**
+   * Stream a document's content, only if it's inside the site's document library.
+   */
+  async getSiteDocumentContent(
+    nodeId: string,
+  ): Promise<{ stream: Readable; mimeType: string; filename: string; size?: number }> {
+    const node = await this.getSiteNode(nodeId);
+    try {
+      const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}/content`, {
+        headers: await this.authHeaders(),
+        responseType: 'stream',
+      });
+      return {
+        stream: response.data,
+        mimeType: node.content?.mimeType || 'application/octet-stream',
+        filename: node.name,
+        size: node.content?.sizeInBytes,
+      };
+    } catch (error) {
+      throw this.wrapError(error, 'Failed to download document content');
+    }
+  }
+
+  // Fetches a node and rejects anything outside the site's document library, so
+  // the browsing endpoints can't be used to read other parts of the repository.
+  private async getSiteNode(nodeId: string): Promise<AlfrescoNode> {
+    if (!NODE_ID_PATTERN.test(nodeId)) {
+      throw new AlfrescoError('Invalid document id', 400);
+    }
+    const docLibraryId = await this.getSiteDocumentLibrary();
+    let node: AlfrescoNode;
+    try {
+      const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}`, {
+        headers: await this.authHeaders(),
+        params: { include: 'properties,path' },
+      });
+      node = response.data.entry;
+    } catch (error) {
+      throw this.wrapError(error, 'Failed to load document');
+    }
+    const inSite = node.path?.elements?.some(el => el.id === docLibraryId);
+    if (!inSite || !node.content) {
+      throw new AlfrescoError('Document not found', 404);
+    }
+    return node;
+  }
+
+  // Maps an Alfresco node onto the app's document shape so the UI can reuse
+  // its existing components.
+  private toAppDocument(node: AlfrescoNode): AlfrescoDocument {
+    const props = node.properties || {};
+    const exported = parseExportedDescription(props['cm:description']);
+    const title = typeof props['cm:title'] === 'string' && props['cm:title'].trim() ? props['cm:title'] : node.name;
+    const highlight = node.search?.highlight?.find(h => h.field === 'cm:content')?.snippets?.[0];
+    const origin = this.baseUrl.match(/^https?:\/\/[^/]+/)?.[0];
+
+    return {
+      id: node.id,
+      filename: title,
+      uploadedAt: node.createdAt,
+      originalPrompt: exported?.originalPrompt || '',
+      extractedData: exported?.extractedData || {},
+      fileType: toFileType(node.content?.mimeType),
+      keywords: Array.isArray(exported?.keywords) ? exported.keywords : [],
+      alfresco: {
+        nodeId: node.id,
+        name: node.name,
+        path: node.path?.name,
+        mimeType: node.content?.mimeType,
+        sizeInBytes: node.content?.sizeInBytes,
+        createdBy: node.createdByUser?.displayName,
+        modifiedAt: node.modifiedAt,
+        modifiedBy: node.modifiedByUser?.displayName,
+        description: !exported && typeof props['cm:description'] === 'string' ? props['cm:description'] : undefined,
+        exportedByApp: !!exported,
+        snippet: highlight ? stripHighlightTags(highlight) : undefined,
+        shareUrl: origin
+          ? `${origin}/share/page/document-details?nodeRef=workspace://SpacesStore/${node.id}`
+          : undefined,
+      },
+    };
+  }
+
+  private wrapError(error: unknown, message: string): AlfrescoError {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    console.error(`${message}:`, describeError(error));
+    if (status === 404) return new AlfrescoError('Document not found', 404);
+    if (status === 401 || status === 403) {
+      return new AlfrescoError('Alfresco rejected the configured credentials', 502);
+    }
+    return new AlfrescoError(message, 502);
   }
 
   /**

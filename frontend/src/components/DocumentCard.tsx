@@ -6,10 +6,22 @@ interface DocumentCardProps {
   document: Document;
   onDelete?: (id: string) => void;
   onClick?: (doc: Document) => void;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  // Shown when the document has no extracted data (e.g. an Alfresco document not exported by this app)
+  summary?: string;
 }
 
-export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, onClick }) => {
+export const DocumentCard: React.FC<DocumentCardProps> = ({
+  document,
+  onDelete,
+  onClick,
+  selected,
+  onToggleSelect,
+  summary,
+}) => {
   const { t } = useLanguage();
+  const dataEntries = Object.entries(document.extractedData);
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -22,12 +34,24 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, 
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer"
+      className={`bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer ${
+        selected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+      }`}
       onClick={() => onClick?.(document)}
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={!!selected}
+                onChange={() => onToggleSelect(document.id)}
+                onClick={e => e.stopPropagation()}
+                title={t('documents.select')}
+                className="h-4 w-4 accent-blue-500 cursor-pointer"
+              />
+            )}
             <span className="text-2xl">{getFileIcon(document.fileType)}</span>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-gray-800 truncate">{document.filename}</h3>
@@ -48,18 +72,21 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, 
         )}
       </div>
 
-      <div className="space-y-1">
-        <p className="text-xs text-gray-600 line-clamp-2">
-          <span className="font-semibold">{t('search.query_placeholder')}:</span> {document.originalPrompt}
-        </p>
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-gray-100">
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">{t('document.data')}:</h4>
+      {document.originalPrompt && (
         <div className="space-y-1">
-          {Object.entries(document.extractedData)
-            .slice(0, 3)
-            .map(([key, value]) => (
+          <p className="text-xs text-gray-600 line-clamp-2">
+            <span className="font-semibold">{t('search.query_placeholder')}:</span> {document.originalPrompt}
+          </p>
+        </div>
+      )}
+
+      {dataEntries.length === 0 && summary && <p className="text-xs text-gray-600 line-clamp-3">{summary}</p>}
+
+      {dataEntries.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <h4 className="text-xs font-semibold text-gray-700 mb-2">{t('document.data')}:</h4>
+          <div className="space-y-1">
+            {dataEntries.slice(0, 3).map(([key, value]) => (
               <div key={key} className="text-xs">
                 <span className="text-gray-600">{key}:</span>{' '}
                 <span className="text-gray-800 truncate block">
@@ -67,11 +94,10 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onDelete, 
                 </span>
               </div>
             ))}
-          {Object.keys(document.extractedData).length > 3 && (
-            <p className="text-xs text-gray-500">+{Object.keys(document.extractedData).length - 3} more fields</p>
-          )}
+            {dataEntries.length > 3 && <p className="text-xs text-gray-500">+{dataEntries.length - 3} more fields</p>}
+          </div>
         </div>
-      </div>
+      )}
 
       {document.evaluations?.some(e => e.status === 'issues_found') && (
         <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded">

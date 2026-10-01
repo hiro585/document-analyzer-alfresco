@@ -25,3 +25,22 @@ export interface Document {
   extractedText?: string;
   ocrUsed?: boolean;
 }
+
+// A document from the configured Alfresco site, mapped onto the local document
+// shape (mirrors AlfrescoDocument in backend/src/types/index.ts).
+export interface AlfrescoDocument extends Document {
+  alfresco: {
+    nodeId: string;
+    name: string;
+    path?: string;
+    mimeType?: string;
+    sizeInBytes?: number;
+    createdBy?: string;
+    modifiedAt: string;
+    modifiedBy?: string;
+    description?: string;
+    exportedByApp: boolean;
+    snippet?: string;
+    shareUrl?: string;
+  };
+}

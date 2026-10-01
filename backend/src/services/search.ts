@@ -58,7 +58,7 @@ function matchesTerm(term: string, tokens: { words: Set<string>; cjkRuns: string
 // run approximates word-sized chunks (shorter windows are mostly grammatical
 // particles common to nearly every sentence, so they're skipped to keep the
 // "no relevant documents" signal meaningful).
-function expandQueryTerms(rawTerms: string[]): string[] {
+export function expandQueryTerms(rawTerms: string[]): string[] {
   const expanded = new Set<string>();
   for (const term of rawTerms) {
     expanded.add(term);
@@ -78,8 +78,9 @@ function expandQueryTerms(rawTerms: string[]): string[] {
 export class SearchService {
   constructor(private storage: StorageService) {}
 
-  async findRelevantDocuments(query: string, limit: number): Promise<Document[]> {
-    const documents = await this.storage.listDocuments();
+  // Ranks `candidates` (all stored documents when omitted) by keyword overlap with the query.
+  async findRelevantDocuments(query: string, limit: number, candidates?: Document[]): Promise<Document[]> {
+    const documents = candidates ?? (await this.storage.listDocuments());
     const rawTerms = query
       .toLowerCase()
       .split(/\s+/)
@@ -114,6 +115,23 @@ export class SearchService {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(s => s.doc);
+  }
+
+  // Picks the documents to hand to the model for a chat question. When the
+  // user scoped the chat (picked documents / search results) and there are few
+  // enough, all of them are used even without keyword overlap (e.g.
+  // "summarize these"); otherwise they're ranked, and a scoped chat falls back
+  // to the first `limit` candidates rather than answering "no match".
+  async pickChatDocuments<T extends Document>(
+    query: string,
+    candidates: T[],
+    scoped: boolean,
+    limit: number,
+  ): Promise<T[]> {
+    if (scoped && candidates.length <= limit) return candidates;
+    const ranked = (await this.findRelevantDocuments(query, limit, candidates)) as T[];
+    if (ranked.length === 0 && scoped) return candidates.slice(0, limit);
+    return ranked;
   }
 
   // Finds already-stored documents whose keywords/summary text significantly

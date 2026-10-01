@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Upload } from './pages/Upload';
 import { Documents } from './pages/Documents';
-import { Search } from './pages/Search';
+import { AlfrescoDocuments } from './pages/AlfrescoDocuments';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import './styles/globals.css';
 
-type TabType = 'upload' | 'documents' | 'search';
+type TabType = 'upload' | 'documents' | 'alfresco';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -56,14 +56,14 @@ function AppContent() {
               {t('nav.documents')}
             </button>
             <button
-              onClick={() => setActiveTab('search')}
+              onClick={() => setActiveTab('alfresco')}
               className={`px-4 py-3 border-b-2 font-medium transition-colors ${
-                activeTab === 'search'
+                activeTab === 'alfresco'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              {t('nav.search')}
+              {t('nav.alfresco')}
             </button>
           </div>
         </div>
@@ -73,14 +73,14 @@ function AppContent() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'upload' && <Upload onDocumentUploaded={handleDocumentUploaded} />}
         {activeTab === 'documents' && <Documents refreshTrigger={refreshTrigger} />}
-        {activeTab === 'search' && <Search />}
+        {activeTab === 'alfresco' && <AlfrescoDocuments />}
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-6 py-6 text-center text-sm text-gray-600">
           <p>
-            {t('footer.ollama')} <code className="bg-gray-100 px-2 py-1 rounded">ollama run mistral</code>
+            {t('footer.ollama')} <code className="bg-gray-100 px-2 py-1 rounded">ollama pull gemma3</code>
           </p>
         </div>
       </footer>

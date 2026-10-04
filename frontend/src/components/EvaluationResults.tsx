@@ -1,10 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { api } from '../api/client';
 import type { AgentEvaluation as Evaluation } from '../types';
+import { AVAILABLE_AGENTS } from './AgentSelector';
 
 interface EvaluationResultsProps {
   evaluations: Evaluation[];
+  showHeading?: boolean;
 }
 
 const STATUS_STYLES: Record<Evaluation['status'], string> = {
@@ -19,45 +20,37 @@ const STATUS_ICON: Record<Evaluation['status'], string> = {
   error: '❓',
 };
 
-export const EvaluationResults: React.FC<EvaluationResultsProps> = ({ evaluations }) => {
+// The agent name is saved in English with each result, so translate it by id;
+// results from agents that no longer exist keep their saved name.
+const AGENT_NAME_KEYS = new Map(AVAILABLE_AGENTS.map(agent => [agent.id, agent.name]));
+
+export const EvaluationResults: React.FC<EvaluationResultsProps> = ({ evaluations, showHeading = true }) => {
   const { t } = useLanguage();
 
   if (!evaluations || evaluations.length === 0) return null;
 
+  const agentName = (evaluation: Evaluation) => {
+    const key = AGENT_NAME_KEYS.get(evaluation.agentId);
+    return key ? t(key) : evaluation.agentName;
+  };
+
   return (
     <div>
-      <h4 className="font-semibold text-gray-800 mb-2">{t('agents.results.heading')}</h4>
-      <div className="space-y-2">
+      {showHeading && <h4 className="text-sm font-semibold text-gray-800 mb-1">{t('agents.results.heading')}</h4>}
+      <div className="space-y-1.5">
         {evaluations.map(evaluation => (
-          <div key={evaluation.agentId} className={`border rounded-lg p-3 ${STATUS_STYLES[evaluation.status]}`}>
+          <div key={evaluation.agentId} className={`border rounded-lg px-3 py-2 ${STATUS_STYLES[evaluation.status]}`}>
             <p className="text-sm font-semibold">
-              {STATUS_ICON[evaluation.status]} {evaluation.agentName}
+              {STATUS_ICON[evaluation.status]} {agentName(evaluation)}
+              <span className="ml-1.5 font-normal text-xs">— {t(`agents.results.status.${evaluation.status}`)}</span>
             </p>
-            <p className="text-sm mt-1">{evaluation.summary}</p>
+            <p className="text-sm mt-1">
+              {evaluation.summary || <span className="italic opacity-75">{t('agents.results.no_explanation')}</span>}
+            </p>
             {evaluation.findings.length > 0 && (
-              <ul className="mt-2 space-y-1 list-disc list-inside text-sm">
+              <ul className="mt-1 space-y-0.5 list-disc list-inside text-sm">
                 {evaluation.findings.map((finding, i) => (
                   <li key={i}>{finding}</li>
-                ))}
-              </ul>
-            )}
-            {evaluation.relatedDocuments && evaluation.relatedDocuments.length > 0 && (
-              <ul className="mt-2 space-y-1 text-sm">
-                {evaluation.relatedDocuments.map(match => (
-                  <li key={match.id}>
-                    <a
-                      href={api.getDocumentFileUrl(match.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-700 underline hover:text-blue-900"
-                    >
-                      {match.filename}
-                    </a>
-                    <span className="text-xs opacity-75">
-                      {' '}
-                      ({Math.round(match.score * 100)}% {t('agents.results.match')})
-                    </span>
-                  </li>
                 ))}
               </ul>
             )}

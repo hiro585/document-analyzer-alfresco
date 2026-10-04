@@ -1,15 +1,14 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as path from 'path';
+import * as os from 'os';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { StorageService } from '../services/storage.js';
 import { FileProcessor } from '../services/file-processor.js';
 import { OllamaService } from '../services/ollama.js';
-import { SearchService } from '../services/search.js';
 import { Document, AgentEvaluation } from '../types/index.js';
 import { getLanguageFromRequest } from '../utils/systemPrompt.js';
-import type { Language } from '../utils/systemPrompt.js';
 import { AI_AGENTS } from '../config/agents.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -19,7 +18,6 @@ export function createUploadRouter(
   storage: StorageService,
   fileProcessor: FileProcessor,
   ollama: OllamaService,
-  search: SearchService,
 ): Router {
   const router = Router();
 
@@ -30,6 +28,7 @@ export function createUploadRouter(
       { name: 'referenceFile', maxCount: 1 },
     ]),
     async (req, res) => {
+      let tempPath: string | undefined;
       try {
         const files = req.files as { file?: Express.Multer.File[]; referenceFile?: Express.Multer.File[] } | undefined;
         const uploadedFile = files?.file?.[0];
@@ -72,7 +71,7 @@ export function createUploadRouter(
 
         const docId = uuidv4();
         const ext = path.extname(originalName).toLowerCase();
-        const tempPath = path.join('/tmp', `${docId}${ext}`);
+        tempPath = path.join(os.tmpdir(), `${docId}${ext}`);
 
         // Save temp file
         await fs.writeFile(tempPath, uploadedFile.buffer);
@@ -81,7 +80,6 @@ export function createUploadRouter(
         let content: string;
         let thumbnail: Buffer;
         let fileType: 'pdf' | 'image' | 'text';
-        let pageCount = 1;
         let ocrUsed = false;
 
         if (ext === '.pdf') {
@@ -89,7 +87,6 @@ export function createUploadRouter(
           content = result.content;
           thumbnail = result.thumbnail;
           fileType = 'pdf';
-          pageCount = result.pageCount;
           ocrUsed = result.ocrUsed;
         } else if (ext === '.txt') {
           const result = await fileProcessor.processText(tempPath);
@@ -97,10 +94,9 @@ export function createUploadRouter(
           thumbnail = result.thumbnail;
           fileType = 'text';
         } else {
-          const result = await fileProcessor.processImage(tempPath);
-          // For images, send the file path for better LLaVA processing
+          // Images go straight to the vision model (see below), not as text
           content = `[Image file: ${originalName}]`;
-          thumbnail = result.thumbnail;
+          thumbnail = await fileProcessor.createImageThumbnail(tempPath);
           fileType = 'image';
         }
 
@@ -130,28 +126,6 @@ export function createUploadRouter(
 
         const evaluations: AgentEvaluation[] = [];
         for (const agent of selectedAgents) {
-          if (agent.type === 'text-search') {
-            const matches = await search.findSimilarDocuments({
-              filename: originalName,
-              keywords,
-              extractedData,
-            });
-
-            evaluations.push({
-              agentId: agent.id,
-              agentName: agent.name,
-              status: matches.length > 0 ? 'issues_found' : 'pass',
-              summary:
-                matches.length > 0
-                  ? `Found ${matches.length} similar document${matches.length > 1 ? 's' : ''} already in storage.`
-                  : 'No similar documents found in storage.',
-              findings: [],
-              evaluatedAt: new Date().toISOString(),
-              relatedDocuments: matches.map(m => ({ id: m.doc.id, filename: m.doc.filename, score: m.score })),
-            });
-            continue;
-          }
-
           if (agent.type === 'record-match') {
             const result = await ollama.runRecordMatchEvaluation(
               summaryText,
@@ -202,19 +176,12 @@ export function createUploadRouter(
         await storage.saveOriginalFile(docId, tempPath, originalName);
         await storage.saveThumbnail(docId, thumbnail);
 
-        // Clean up temp file
-        await fs.unlink(tempPath);
-
         res.json({ success: true, document: doc });
       } catch (error) {
         console.error('Upload error:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Upload failed';
-        const details = error instanceof Error ? error.stack : '';
-        console.error('Error details:', details);
-        res.status(500).json({
-          error: errorMsg,
-          details: details ? details.split('\n').slice(0, 3).join(' ') : '',
-        });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Upload failed' });
+      } finally {
+        if (tempPath) await fs.unlink(tempPath).catch(() => {});
       }
     },
   );

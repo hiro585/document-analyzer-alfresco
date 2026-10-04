@@ -55,12 +55,17 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   };
 
   return (
+    // Short columns get fixed widths so their text never wraps when the list is
+    // narrow (e.g. beside the details panel); below the minimum width the table
+    // scrolls sideways instead of squeezing them.
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+      <table
+        className={`w-full table-fixed divide-y divide-gray-200 ${showStatus ? 'min-w-[760px]' : 'min-w-[620px]'}`}
+      >
         <thead>
-          <tr className="text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <tr className="text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
             {selectable && (
-              <th className="pl-4 py-2 w-8">
+              <th className="pl-3 py-1.5 w-9">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -70,12 +75,12 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 />
               </th>
             )}
-            <th className="px-4 py-2">{t('document.filename')}</th>
-            <th className="px-4 py-2">{t('document.uploaded')}</th>
-            <th className="px-4 py-2">{t('documents.list.type')}</th>
-            <th className="px-4 py-2">{t('documents.list.data')}</th>
-            {showStatus && <th className="px-4 py-2">{t('documents.list.status')}</th>}
-            <th className="px-4 py-2 text-right">{t('documents.list.actions')}</th>
+            <th className="px-3 py-1.5">{t('document.filename')}</th>
+            <th className="px-3 py-1.5 w-28">{t('document.uploaded')}</th>
+            <th className="px-3 py-1.5 w-20">{t('documents.list.type')}</th>
+            <th className="px-3 py-1.5">{t('documents.list.data')}</th>
+            {showStatus && <th className="px-3 py-1.5 w-36">{t('documents.list.status')}</th>}
+            <th className="px-3 py-1.5 w-24 text-right">{t('documents.list.actions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -86,7 +91,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               onClick={() => onClick?.(doc)}
             >
               {selectable && (
-                <td className="pl-4 py-2">
+                <td className="pl-3 py-1.5">
                   <input
                     type="checkbox"
                     checked={!!selectedIds?.has(doc.id)}
@@ -97,17 +102,19 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   />
                 </td>
               )}
-              <td className="px-4 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-lg">{getFileIcon(doc.fileType)}</span>
-                  <span className="font-medium text-gray-800 truncate max-w-xs">{doc.filename}</span>
+              <td className="px-3 py-1.5">
+                <div className="flex items-center gap-2 min-w-0" title={doc.filename}>
+                  <span className="text-base flex-shrink-0">{getFileIcon(doc.fileType)}</span>
+                  <span className="font-medium text-gray-800 truncate">{doc.filename}</span>
                 </div>
               </td>
-              <td className="px-4 py-2 text-sm text-gray-600 whitespace-nowrap">{formatDate(doc.uploadedAt)}</td>
-              <td className="px-4 py-2 text-sm text-gray-600 uppercase">{doc.fileType}</td>
-              <td className="px-4 py-2 text-sm text-gray-600 max-w-sm truncate">{summarizeData(doc)}</td>
+              <td className="px-3 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(doc.uploadedAt)}</td>
+              <td className="px-3 py-1.5 text-sm text-gray-600 uppercase whitespace-nowrap">{doc.fileType}</td>
+              <td className="px-3 py-1.5 text-sm text-gray-600 truncate" title={summarizeData(doc)}>
+                {summarizeData(doc)}
+              </td>
               {showStatus && (
-                <td className="px-4 py-2 text-sm">
+                <td className="px-3 py-1.5 text-sm whitespace-nowrap">
                   {doc.alfrescoNodeId ? (
                     <span className="text-green-700">✅ {t('documents.list.alfresco')}</span>
                   ) : (
@@ -115,14 +122,14 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   )}
                 </td>
               )}
-              <td className="px-4 py-2 text-right">
+              <td className="px-3 py-1.5 text-right">
                 {onDelete && (
                   <button
                     onClick={e => {
                       e.stopPropagation();
                       onDelete(doc.id);
                     }}
-                    className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm"
+                    className="px-1.5 py-0.5 text-red-600 hover:bg-red-50 rounded text-sm"
                   >
                     🗑️
                   </button>

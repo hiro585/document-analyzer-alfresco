@@ -32,38 +32,57 @@
   <string key="uploadzone.drag" en="Drag and drop files here" ja="ここにファイルをドラッグ＆ドロップ" />
   <string key="uploadzone.or" en="or" ja="または" />
   <string key="uploadzone.click" en="click to select" ja="クリックして選択" />
-  <string key="uploadzone.supported" en="Supported formats: PDF, DOCX, PPTX, XLSX" ja="サポートされている形式: PDF、DOCX、PPTX、XLSX" />
 
   <!-- Prompt Editor -->
   <string key="prompt.label" en="Enter your analysis prompt:" ja="分析プロンプトを入力:" />
   <string key="prompt.placeholder" en="E.g., Extract all invoice numbers and dates" ja="例: すべての請求書番号と日付を抽出" />
-  <string key="prompt.character_count" en="characters" ja="文字" />
 
   <!-- Results Display -->
   <string key="results.heading" en="Analysis Results" ja="分析結果" />
-  <string key="results.empty" en="No results to display" ja="表示するデータがありません" />
 
   <!-- Documents Page -->
   <string key="documents.heading" en="📚 Documents" ja="📚 ドキュメント" />
   <string key="documents.loading" en="Loading documents..." ja="ドキュメント読み込み中..." />
-  <string key="documents.error" en="Failed to load documents" ja="ドキュメントの読み込みに失敗しました" />
   <string key="documents.empty" en="No documents uploaded yet" ja="まだドキュメントがアップロードされていません" />
-  <string key="documents.uploaded" en="Uploaded:" ja="アップロード:" />
-  <string key="documents.view" en="👁️ View" ja="👁️ 表示" />
   <string key="documents.delete" en="🗑️ Delete" ja="🗑️ 削除" />
   <string key="documents.delete.confirm" en="Are you sure you want to delete this document?" ja="このドキュメントを削除してもよろしいですか?" />
-  <string key="documents.delete.loading" en="Deleting..." ja="削除中..." />
   <string key="documents.list.collapse" en="Hide document list" ja="ドキュメント一覧を非表示" />
   <string key="documents.list.expand" en="Show document list" ja="ドキュメント一覧を表示" />
   <string key="documents.view.thumbnail" en="Thumbnail view" ja="サムネイル表示" />
   <string key="documents.view.list" en="List view" ja="リスト表示" />
   <string key="documents.list.type" en="Type" ja="種類" />
-  <string key="documents.list.prompt" en="Prompt" ja="プロンプト" />
   <string key="documents.list.data" en="Extracted Data" ja="抽出データ" />
   <string key="documents.list.status" en="Status" ja="ステータス" />
   <string key="documents.list.actions" en="Actions" ja="操作" />
   <string key="documents.list.alfresco" en="In Alfresco" ja="Alfresco登録済" />
+  <string key="documents.exported_on" en="✅ Exported to Alfresco on {date}" ja="✅ {date}にAlfrescoへエクスポート済み" />
+  <string key="documents.export_all.button" en="📤 Export All to Alfresco" ja="📤 すべてAlfrescoにエクスポート" />
+  <string key="documents.export_all.confirm" en="Export all {count} documents to Alfresco?" ja="{count}件すべてのドキュメントをAlfrescoにエクスポートしますか？" />
+  <string key="documents.export_all.done" en="✅ Exported {count} documents to Alfresco" ja="✅ {count}件をAlfrescoにエクスポートしました" />
+  <string key="documents.export_all.some_failed" en="⚠️ {count} documents failed to export" ja="⚠️ {count}件のエクスポートに失敗しました" />
   <string key="documents.preview.open" en="🔗 Open original file" ja="🔗 元のファイルを開く" />
+  <string key="documents.preview.expand" en="Click to enlarge the preview" ja="クリックしてプレビューを拡大" />
+  <string key="documents.tab.info" en="Info" ja="情報" />
+  <string key="documents.tab.data" en="Extracted Data" ja="抽出データ" />
+  <string key="documents.tab.related" en="Related" ja="関連" />
+  <string key="documents.tab.agents" en="AI Agents" ja="AIエージェント" />
+  <string key="documents.tab.text" en="Text" ja="テキスト" />
+  <string key="documents.tab.empty" en="No content for this document" ja="このドキュメントには内容がありません" />
+  <string key="compare.button" en="Compare" ja="比較" />
+  <string key="compare.button.hint" en="Select exactly 2 documents to compare" ja="比較するドキュメントを2つだけ選択してください" />
+  <string key="compare.heading" en="Compare documents" ja="ドキュメント比較" />
+  <string key="compare.close" en="Close comparison" ja="比較を閉じる" />
+  <string key="compare.details" en="Details" ja="詳細" />
+  <string key="compare.summary" en="{diff} of {total} fields differ" ja="{total}項目中{diff}項目が異なります" />
+  <string key="compare.identical" en="All {total} fields match" ja="全{total}項目が一致しています" />
+  <string key="compare.differs" en="Values differ" ja="値が異なります" />
+  <string key="compare.field" en="Field" ja="項目" />
+  <string key="compare.no_data" en="no extracted data" ja="抽出データなし" />
+  <string key="compare.no_preview" en="No preview available for this file type" ja="このファイル形式はプレビューできません" />
+  <string key="documents.related.loading" en="Searching for related documents..." ja="関連ドキュメントを検索中..." />
+  <string key="documents.related.empty" en="No related documents found" ja="関連ドキュメントが見つかりません" />
+  <string key="documents.related.similarity" en="Content similarity" ja="内容の類似度" />
+  <string key="pagination.page_size" en="Per page:" ja="表示件数:" />
   <string key="documents.search.placeholder" en="Search documents by name, keyword, or content..." ja="ファイル名、キーワード、内容で検索..." />
   <string key="documents.search.no_results" en="No documents match your search" ja="検索に一致するドキュメントがありません" />
   <string key="documents.search.clear" en="Clear search" ja="検索をクリア" />
@@ -104,40 +123,53 @@
   <string key="alfresco.detail.metadata_only" en="This document wasn't exported by this app, so it has no extracted data. Chat can use its title, description and search excerpt, but not its full content." ja="このドキュメントはこのアプリからエクスポートされたものではないため、抽出データがありません。チャットではタイトル、説明、検索の抜粋を使用できますが、内容全体は使用できません。" />
 
   <!-- Document Card -->
-  <string key="document.id" en="ID:" ja="ID:" />
   <string key="document.filename" en="Filename:" ja="ファイル名:" />
   <string key="document.uploaded" en="Uploaded:" ja="アップロード:" />
-  <string key="document.data" en="Extracted Data:" ja="抽出されたデータ:" />
+  <string key="document.more_fields" en="+{count} more fields" ja="他{count}項目" />
+  <string key="document.exported_date" en="Exported: {date}" ja="エクスポート日: {date}" />
 
   <!-- Chat input -->
-  <string key="search.query_placeholder" en="Enter search query or question..." ja="検索クエリまたは質問を入力..." />
   <string key="search.chat_placeholder" en="Ask a question about your documents..." ja="ドキュメントについて質問..." />
   <string key="search.send" en="📤 Send" ja="📤 送信" />
   <string key="search.chat_loading" en="🤖 Thinking..." ja="🤖 考え中..." />
 
   <!-- Chat Panel -->
   <string key="chat.empty" en="No messages yet. Ask a question to get started!" ja="メッセージがありません。質問を入力して開始してください！" />
-  <string key="chat.user" en="You" ja="あなた" />
-  <string key="chat.assistant" en="Assistant" ja="アシスタント" />
   <string key="chat.sources" en="📎 Sources" ja="📎 参照元" />
   <string key="chat.heading" en="💬 Chat" ja="💬 チャット" />
   <string key="chat.open" en="Open chat" ja="チャットを開く" />
   <string key="chat.close" en="Close chat" ja="チャットを閉じる" />
   <string key="chat.clear" en="Clear conversation" ja="会話をクリア" />
-  <string key="chat.error" en="Sorry, I encountered an error. Make sure Ollama is running." ja="エラーが発生しました。Ollamaが実行中であることを確認してください。" />
+  <string key="chat.error" en="Sorry, something went wrong:" ja="エラーが発生しました:" />
   <string key="chat.empty.hint" en="Tip: search or tick documents first to ask about just those." ja="ヒント：先に検索するかドキュメントにチェックを入れると、その対象だけに質問できます。" />
   <string key="chat.source.show" en="Show document details" ja="ドキュメントの詳細を表示" />
   <string key="chat.scope.label" en="Ask about" ja="質問の対象" />
+  <string key="chat.scope.document" en="This document" ja="表示中の文書" />
   <string key="chat.scope.selected" en="Selected" ja="選択中" />
   <string key="chat.scope.results" en="Search results" ja="検索結果" />
-  <string key="chat.scope.all" en="All" ja="すべて" />
+  <string key="chat.scope.all" en="Search all" ja="全体から検索" />
+  <string key="chat.scope.all.hint" en="Finds the documents that best match your question among all {total}, and answers from up to 5 of them" ja="全{total}件から質問に最も合うドキュメントを探し、そのうち最大5件をもとに回答します" />
+  <string key="chat.scope.limit_hint" en="Answers from up to 5 of these {count} documents that best match your question" ja="この{count}件のうち、質問に最も合う最大5件をもとに回答します" />
   <string key="chat.scope.limit_note" en="Each answer uses up to 5 of the most relevant documents." ja="回答ごとに、関連性の高いドキュメントを最大5件使用します。" />
+  <string key="chat.scope.used.document" en="Asked about {name}" ja="「{name}」に質問" />
   <string key="chat.scope.used.selected" en="Asked about {count} selected documents" ja="選択中の{count}件に質問" />
   <string key="chat.scope.used.results" en="Asked about {count} search results" ja="検索結果{count}件に質問" />
-  <string key="chat.scope.used.all" en="Asked about all documents" ja="すべてのドキュメントに質問" />
+  <string key="chat.scope.used.all" en="Searched all documents for this question" ja="全体から検索して質問" />
 
-  <!-- Footer -->
-  <string key="footer.ollama" en="💡 Requires Ollama running locally with at least one model installed. A vision-capable model such as gemma3 is recommended for images and scanned PDFs:" ja="💡 ローカルでOllamaを起動し、モデルを1つ以上インストールしてください。画像やスキャンPDFには、gemma3などの画像対応モデルを推奨します:" />
+  <!-- AI service status (shown only when uploads and chat can't work) -->
+  <string key="status.server_unreachable" en="The app's server isn't responding. Check that the backend is running." ja="アプリのサーバーが応答していません。バックエンドが起動しているか確認してください。" />
+  <string key="status.ollama_unreachable" en="The AI service (Ollama) isn't reachable, so uploading and chat won't work. Start Ollama; this message disappears once it's back." ja="AIサービス（Ollama）に接続できないため、アップロードとチャットが使えません。Ollamaを起動してください。復旧するとこのメッセージは消えます。" />
+  <string key="status.no_models" en="Ollama has no AI model installed, so uploading and chat won't work. Install one:" ja="OllamaにAIモデルがインストールされていないため、アップロードとチャットが使えません。次のいずれかをインストールしてください:" />
+  <string key="status.or" en="or" ja="または" />
+  <string key="status.sentence_end" en="." ja="。" />
+  <string key="status.choose_model" en="Then set OLLAMA_MODEL in .env to it and restart the backend." ja="その後、.env の OLLAMA_MODEL にそのモデルを指定し、バックエンドを再起動してください。" />
+  <string key="status.model_not_set" en="No AI model is selected, so uploading and chat won't work. Set OLLAMA_MODEL in .env (e.g. gemma3:4b or qwen3-vl:4b-instruct) and restart the backend." ja="AIモデルが選択されていないため、アップロードとチャットが使えません。.env の OLLAMA_MODEL にモデル（例: gemma3:4b、qwen3-vl:4b-instruct）を指定し、バックエンドを再起動してください。" />
+  <string key="status.installed" en="Installed: {models}" ja="インストール済み: {models}" />
+  <string key="status.model_missing" en="The model set in OLLAMA_MODEL ({model}) isn't installed in Ollama. Install it:" ja="OLLAMA_MODEL で指定されたモデル（{model}）がOllamaにインストールされていません。インストールしてください:" />
+  <string key="status.or_change_model" en="or set OLLAMA_MODEL in .env to an installed model and restart the backend." ja="または .env の OLLAMA_MODEL をインストール済みのモデルに変更し、バックエンドを再起動してください。" />
+  <string key="status.check_again" en="Check again" ja="再確認" />
+  <string key="status.dismiss" en="Hide this message" ja="このメッセージを閉じる" />
+  <string key="error.server_unreachable" en="Couldn't reach the app's server. Check that the backend is running." ja="アプリのサーバーに接続できませんでした。バックエンドが起動しているか確認してください。" />
 
   <!-- AI Agents -->
   <string key="agents.label" en="AI Agents (optional):" ja="AIエージェント（任意）:" />
@@ -145,13 +177,14 @@
   <string key="agent.fraud_detection.description" en="Checks the document for wrongful, falsified, or suspicious information." ja="ドキュメントに不正、改ざん、または疑わしい情報がないか確認します。" />
   <string key="agent.missing_info.name" en="Missing Information Check Agent" ja="欠落情報チェックエージェント" />
   <string key="agent.missing_info.description" en="Checks the document for missing or incomplete required entries." ja="ドキュメントに欠落または不完全な必須項目がないか確認します。" />
-  <string key="agent.similar_documents.name" en="Similar Document Check Agent" ja="類似ドキュメントチェックエージェント" />
-  <string key="agent.similar_documents.description" en="Searches already-uploaded documents for similar or duplicate content, using keyword/text overlap (no AI model call)." ja="キーワード・テキストの一致度に基づき、既にアップロード済みのドキュメントの中から類似または重複する内容を検索します（AIモデルは使用しません）。" />
   <string key="agent.record_match.name" en="Record Match Agent" ja="レコード照合エージェント" />
   <string key="agent.record_match.description" en="Checks whether the extracted data matches a record in an uploaded reference list (e.g. a registration list). Requires uploading a CSV/TXT reference file." ja="抽出されたデータが、アップロードされた参照リスト（例：登録リスト）内のレコードと一致するかを確認します。CSV・TXTの参照ファイルのアップロードが必要です。" />
   <string key="agents.results.heading" en="🤖 AI Agent Evaluations" ja="🤖 AIエージェント評価" />
   <string key="agents.results.issues_badge" en="Agent flagged issues" ja="エージェントが問題を検出しました" />
-  <string key="agents.results.match" en="match" ja="一致" />
+  <string key="agents.results.status.pass" en="No issues found" ja="問題なし" />
+  <string key="agents.results.status.issues_found" en="Issues found" ja="問題あり" />
+  <string key="agents.results.status.error" en="Couldn't run" ja="実行できませんでした" />
+  <string key="agents.results.no_explanation" en="The AI gave no explanation for this result." ja="AIはこの結果の理由を示しませんでした。" />
   <string key="agents.reference_file.label" en="Reference file (CSV/TXT) — required" ja="参照ファイル（CSV・TXT）— 必須" />
   <string key="agents.reference_file.required" en="Please upload a reference CSV/TXT file to run this agent" ja="このエージェントを実行するには、参照用のCSV・TXTファイルをアップロードしてください" />
 
@@ -161,23 +194,11 @@
   <string key="ocr.notice" en="This document had no embedded text layer, so this text was read from each page image by the AI vision model (including handwriting). Accuracy may vary for difficult handwriting." ja="このドキュメントには埋め込みテキスト層がなかったため、AIビジョンモデルが各ページ画像からこのテキストを読み取りました（手書きを含む）。判読が難しい手書き文字は精度が変動することがあります。" />
 
   <!-- Prompt Templates -->
-  <string key="prompt.template.1.name" en="Extract Numbers" ja="数字を抽出" />
-  <string key="prompt.template.1.text" en="Extract all numbers, amounts, and numerical values from this document." ja="このドキュメントからすべての数字、金額、および数値を抽出してください。" />
 
-  <string key="prompt.template.2.name" en="Extract Names and Organizations" ja="名前と組織を抽出" />
-  <string key="prompt.template.2.text" en="Find and extract all names of people and organizations mentioned in this document." ja="このドキュメントで言及されている人々と組織のすべての名前を検索して抽出してください。" />
 
-  <string key="prompt.template.3.name" en="Summarize Document" ja="ドキュメントを要約" />
   <string key="prompt.template.3.text" en="Provide a concise summary of the main content of this document. Include all key details exactly as written, including handwritten notes, signatures, dates, and amounts — do not omit them for the sake of brevity." ja="このドキュメントの主な内容の簡潔な要約を提供してください。手書きのメモ、署名、日付、金額などの重要な詳細は、簡潔さのために省略せず、記載されているとおりにすべて含めてください。" />
 
-  <string key="prompt.template.4.name" en="Extract Key Information" ja="重要な情報を抽出" />
-  <string key="prompt.template.4.text" en="Extract the most important information from this document in a structured format." ja="このドキュメントから最も重要な情報を構造化された形式で抽出してください。" />
 
   <!-- Common -->
   <string key="common.loading" en="Loading..." ja="読み込み中..." />
-  <string key="common.error" en="Error" ja="エラー" />
-  <string key="common.success" en="Success" ja="成功" />
-  <string key="common.cancel" en="Cancel" ja="キャンセル" />
-  <string key="common.ok" en="OK" ja="OK" />
-  <string key="common.back" en="Back" ja="戻る" />
 </translations>

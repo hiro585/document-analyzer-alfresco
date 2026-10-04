@@ -43,11 +43,6 @@ export interface AgentEvaluation {
   summary: string;
   findings: string[];
   evaluatedAt: string;
-  relatedDocuments?: { id: string; filename: string; score: number }[];
-}
-
-export interface ExtractedData {
-  [key: string]: any;
 }
 
 export interface Prompt {

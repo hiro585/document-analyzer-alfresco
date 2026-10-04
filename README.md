@@ -1,6 +1,6 @@
 # Document Analyzer
 
-A local, privacy-first web app for analyzing documents with AI. Upload PDFs, images, or text files, describe what to extract in a prompt, and a model running locally in [Ollama](https://ollama.com) returns structured data. Optional AI "agents" can check documents for fraud, missing information, duplicates, or mismatches against a reference list. You can browse the document library, chat with your documents, and export them to Alfresco if you use it. The UI and AI responses support English and Japanese.
+A local, privacy-first web app for analyzing documents with AI. Upload PDFs, images, or text files, describe what to extract in a prompt, and a model running locally in [Ollama](https://ollama.com) returns structured data. Optional AI "agents" can check documents for fraud, missing information, or mismatches against a reference list. You can browse the document library, chat with your documents, and export them to Alfresco if you use it. The UI and AI responses support English and Japanese.
 
 ## Features
 
@@ -9,9 +9,11 @@ A local, privacy-first web app for analyzing documents with AI. Upload PDFs, ima
 - **Evaluation agents** (optional, selected per upload):
   - *Fraud Detection*: LLM check for falsified or inconsistent content.
   - *Missing Information Check*: LLM check for blank or incomplete fields.
-  - *Similar Document Check*: keyword/text-overlap search against existing documents (no model call).
   - *Record Match*: compares extracted data against an uploaded CSV/TXT reference file. The file is required.
 - **Document library**: thumbnail and list views, pagination, detail view with extracted data and source text, delete.
+- **Related documents**: the detail view lists other documents with similar content (TF-IDF similarity over keywords and extracted data, no model call).
+- **Compare**: tick exactly two documents and click *Compare* to see their files side by side, with the extracted fields that differ highlighted.
+- **Ollama status bar**: a warning bar appears when the backend or Ollama is unreachable or `OLLAMA_MODEL` is missing or not installed, and disappears once it is fixed.
 - **Chat**: ask questions in natural language from a panel next to the document library. You can ask about the documents you ticked, the current search results, or all documents. Up to 5 of the most relevant documents (picked by keyword matching) are passed to the model as context, and their sources are returned with the answer.
 - **Multi-language**: the UI strings, prompt templates, and model responses follow the selected language (English or Japanese).
 - **Alfresco export** (optional): push single documents or all documents, with extracted data as metadata, to an Alfresco repository.
@@ -30,14 +32,14 @@ A local, privacy-first web app for analyzing documents with AI. Upload PDFs, ima
 ## Prerequisites
 
 - **Node.js 18+** and npm
-- **Ollama**, running locally (default `http://localhost:11434`). Pull at least one model:
+- **Ollama**, running locally (default `http://localhost:11434`). Pull at least one vision-capable model:
 
   ```bash
-  ollama pull gemma3      # preferred: vision-capable, used for images and scanned PDFs
-  ollama pull mistral     # optional text-only fallback
+  ollama pull gemma3:4b              # or:
+  ollama pull qwen3-vl:4b-instruct
   ```
 
-  The backend picks a model automatically, in this order: the first installed model whose name contains `gemma3`, then `mistral`, then `llama`, and otherwise whatever model is listed first. Image uploads and scanned-PDF transcription need a **vision-capable** model, such as `gemma3` or `llava`.
+  Then set `OLLAMA_MODEL` in `.env` to the model to use (for example `gemma3:4b` or `qwen3-vl:4b-instruct`) and restart the backend. This setting is required: there is no automatic choice, and while it is missing (or names a model that is not installed) uploads and chat stop with a message explaining what to fix, and a warning bar appears in the app. Image uploads and scanned-PDF transcription need a **vision-capable** model, such as `gemma3`, `qwen3-vl` or `llava`. On a CPU-only machine, use a non-thinking variant such as `qwen3-vl:4b-instruct`. Images are downscaled to at most 1280px on the longest side before they are sent to the model.
 
 - **poppler-utils** (provides `pdftoppm`), needed only for scanned or image-only PDFs:
 
@@ -83,7 +85,9 @@ The backend reads `.env` from the **project root**. Copy `.env.example` to start
 | Variable            | Where              | Default                     | Description |
 |---------------------|--------------------|-----------------------------|-------------|
 | `PORT`              | root `.env`        | `3001`                      | Backend HTTP port |
+| `CORS_ORIGIN`       | root `.env`        | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated browser origins allowed to call the API. Set it if you serve the frontend from another host or port |
 | `OLLAMA_URL`        | root `.env`        | `http://localhost:11434`    | Base URL of the Ollama server |
+| `OLLAMA_MODEL`      | root `.env`        | (required)                  | Installed Ollama model to use, e.g. `gemma3:4b` or `qwen3-vl:4b-instruct` |
 | `ALFRESCO_URL`      | root `.env`        | none                        | Alfresco public REST API base, e.g. `http://host:8080/alfresco/api/-default-/public/alfresco/versions/1` |
 | `ALFRESCO_USERNAME` | root `.env`        | none                        | Alfresco user |
 | `ALFRESCO_PASSWORD` | root `.env`        | none                        | Alfresco password |
@@ -92,6 +96,10 @@ The backend reads `.env` from the **project root**. Copy `.env.example` to start
 | `VITE_API_URL`      | `frontend/.env`    | `http://localhost:3001/api` | Backend API base URL used by the frontend (read at build time) |
 
 The Alfresco variables are needed only for the export feature and the *Documents (Alfresco)* tab. Never commit `.env` files.
+
+### Security note
+
+This app is meant to run on your own machine. The backend has **no authentication**: anyone who can reach port 3001 can read, upload, and delete documents, and browse the configured Alfresco site with the account from `.env`. The backend listens on all network interfaces, so on a shared network, block the port with a firewall or put the app behind an authenticating reverse proxy. Browser access from other websites is blocked by the `CORS_ORIGIN` allowlist.
 
 ## Usage
 
@@ -109,7 +117,7 @@ Exporting is optional. Everything stays in local storage whether or not you expo
 
 1. Set `ALFRESCO_URL`, `ALFRESCO_USERNAME`, and `ALFRESCO_PASSWORD` in `.env`, then restart the backend.
 2. The target repository must have a site with the id **`demo`** (or the id set in `ALFRESCO_SITE`). Files are uploaded to that site's `documentLibrary`, and a timestamp is added to each filename to keep it unique.
-3. Each exported node gets `cm:title` set to the original filename and `cm:description` set to a JSON summary of the extracted data. The Alfresco node ID and export time are saved back to the local document metadata.
+3. Each exported node gets `cm:title` set to the extracted keywords and `cm:description` set to a JSON summary of the extracted data, including the original filename. The Alfresco node ID and export time are saved back to the local document metadata.
 
 You can export from the UI (after an upload, per document, or *Export All* on the Documents page) or through the API (see below). `./test-alfresco.sh` runs a connection test, a single export, and a listing against a running backend.
 
@@ -150,14 +158,15 @@ Components get translated strings from `useLanguage().t('upload.button')` (see `
 │       ├── routes/             # upload, documents, prompts, llm, alfresco-export, alfresco-documents
 │       ├── services/           # ollama, file-processor, storage, search, alfresco
 │       ├── types/              # Shared TypeScript types
-│       └── utils/              # Language-aware system prompts, translator
+│       └── utils/              # Language-aware system prompts
 ├── frontend/
 │   ├── public/translations.xml # UI strings (en/ja)
 │   └── src/
 │       ├── App.tsx             # Tabs: Upload / Documents (Local) / Documents (Alfresco)
 │       ├── api/client.ts       # Backend API client
-│       ├── components/         # UploadZone, PromptEditor, AgentSelector, ChatPanel, ...
+│       ├── components/         # UploadZone, PromptEditor, AgentSelector, ChatPanel, CompareView, ...
 │       ├── contexts/           # LanguageContext
+│       ├── hooks/              # useRelatedDocuments
 │       ├── pages/              # Upload, Documents and AlfrescoDocuments (library + chat)
 │       └── styles/
 ├── start.sh                    # Install-if-needed + npm run dev
@@ -175,9 +184,12 @@ All routes are served under `http://localhost:3001/api`.
 | GET    | `/documents` | List documents |
 | GET    | `/documents/:id` | Get document metadata and extracted data |
 | GET    | `/documents/:id/file` | Download or view the original file |
+| GET    | `/documents/:id/thumbnail` | Thumbnail image (PDFs and images only) |
+| GET    | `/documents/:id/related` | Up to 5 documents with similar content |
 | DELETE | `/documents/:id` | Delete a document |
 | GET    | `/prompts` | Prompt templates and custom prompts (`?language=ja` for translations) |
 | POST   | `/prompts` | Save a custom prompt |
+| GET    | `/llm/status` | Whether Ollama is reachable and `OLLAMA_MODEL` is installed |
 | POST   | `/llm/chat` | Ask a question across documents: `{ query, language, documentIds? }`. `documentIds` limits the question to those documents |
 | GET    | `/alfresco/test` | Test Alfresco connection |
 | POST   | `/alfresco/export/:documentId` | Export one document |
@@ -187,12 +199,15 @@ All routes are served under `http://localhost:3001/api`.
 | GET    | `/alfresco/documents?query=&page=&pageSize=` | Search or list the site's documents (including subfolders), paged |
 | GET    | `/alfresco/documents/:nodeId` | One document (only inside the site's document library) |
 | GET    | `/alfresco/documents/:nodeId/content` | Stream the document's file |
+| GET    | `/alfresco/documents/:nodeId/thumbnail` | Alfresco's thumbnail rendition (404 until Alfresco has generated it) |
+| GET    | `/alfresco/documents/:nodeId/related` | Up to 5 other site documents sharing terms with this one |
 | POST   | `/alfresco/chat` | Ask about Alfresco documents: `{ query, language, nodeIds?, searchQuery? }`. `nodeIds` limits to those documents, `searchQuery` to that search's results, and neither searches the site for the question |
 
 ## Troubleshooting
 
 - **"Could not connect to Ollama"**: make sure `ollama serve` is running and that `OLLAMA_URL` points to it.
-- **"No models found in Ollama"**: run `ollama pull gemma3`.
+- **"No models are installed in Ollama"** or **"No AI model is selected"**: run `ollama pull gemma3:4b`, set `OLLAMA_MODEL` in `.env`, and restart the backend.
+- **Requests fail with CORS errors**: you are opening the frontend from an origin not listed in `CORS_ORIGIN`.
 - **Images or scanned PDFs return nothing useful**: check that a vision-capable model is installed and selected (the backend logs which model it chose at startup), and that `pdftoppm` is on your `PATH`.
 - **Alfresco export fails**: run `GET /api/alfresco/test`, check the three `ALFRESCO_*` variables, and confirm that a site with the id `demo` (or `ALFRESCO_SITE`) exists.
 

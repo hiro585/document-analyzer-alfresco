@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, ChatResponse, ChatSource } from '../api/client';
+import { api, apiErrorMessage, ChatResponse, ChatSource } from '../api/client';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface Message {
@@ -70,10 +70,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
+      const detail = apiErrorMessage(error);
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: t('chat.error'),
+        content: detail ? `${t('chat.error')} ${detail}` : t('error.server_unreachable'),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -85,9 +86,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     <div className="flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden">
       {header}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {messages.length === 0 && (
-          <div className="text-center text-gray-500 text-sm py-8 space-y-2">
+          <div className="text-center text-gray-500 text-sm py-6 space-y-2">
             <p>{t('chat.empty')}</p>
             {onSourceClick && <p className="text-xs text-gray-400">{t('chat.empty.hint')}</p>}
           </div>
@@ -158,7 +159,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-3 flex gap-2">
+      <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-2 flex gap-2">
         {messages.length > 0 && (
           <button
             type="button"
@@ -176,12 +177,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onChange={e => setQuery(e.target.value)}
           disabled={disabled || loading}
           placeholder={t('search.chat_placeholder')}
-          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 text-sm"
+          className="flex-1 min-w-0 px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 text-sm"
         />
         <button
           type="submit"
           disabled={disabled || loading || !query.trim()}
-          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:bg-gray-400 text-sm whitespace-nowrap"
+          className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:bg-gray-400 text-sm whitespace-nowrap"
         >
           {t('search.send')}
         </button>

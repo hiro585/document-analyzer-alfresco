@@ -43,14 +43,13 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesSelected, disable
       onDragOver={handleDrag}
       onDrop={handleDrop}
       className={`
-        relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+        relative border-2 border-dashed rounded-lg px-4 py-5 text-center cursor-pointer
         transition-all duration-200 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'}
       `}
     >
       <input
         type="file"
-        multiple
         accept=".pdf,.jpg,.jpeg,.png,.txt"
         onChange={handleChange}
         disabled={disabled}
@@ -58,10 +57,8 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesSelected, disable
         id="file-input"
       />
       <label htmlFor="file-input" className="block cursor-pointer">
-        <div className="text-4xl mb-2">📄</div>
-        <p className="text-lg font-semibold text-gray-700 mb-1">
-          {isDragActive ? t('uploadzone.drag') : t('uploadzone.drag')}
-        </p>
+        <div className="text-3xl mb-1">📄</div>
+        <p className="text-base font-semibold text-gray-700">{t('uploadzone.drag')}</p>
         <p className="text-sm text-gray-500">
           {t('uploadzone.or')} {t('uploadzone.click')} (PDF, JPG, PNG, TXT)
         </p>

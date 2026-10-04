@@ -3,21 +3,33 @@ import { api, AlfrescoStatus } from '../api/client';
 import { ChatPanel } from '../components/ChatPanel';
 import { DocumentCard } from '../components/DocumentCard';
 import { DocumentListView } from '../components/DocumentListView';
-import { Pagination } from '../components/Pagination';
+import { Pagination, usePageSize, pageAfterResize } from '../components/Pagination';
+import { RelatedDocuments } from '../components/RelatedDocuments';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { AlfrescoDocument } from '../types';
+import { useRelatedDocuments } from '../hooks/useRelatedDocuments';
+import { DetailTabs } from '../components/DetailTabs';
+import { ExtractedDataList } from '../components/ExtractedDataList';
+import { CompareButton, CompareView } from '../components/CompareView';
 
 // Read-only counterpart of the Documents page for the Alfresco site configured
 // in .env. Search and paging run in Alfresco, so only one page is loaded at a time.
 
 type ViewMode = 'thumbnail' | 'list';
-type ChatScope = 'selected' | 'results' | 'all';
 
-const PAGE_SIZE = 10;
+// With the list collapsed the preview sits beside the details, so it can use
+// the panel's full height (the panel is capped at 100vh - 72px; its padding,
+// title and the "open original" link take the rest). Never below the normal 24rem.
+const PREVIEW_HEIGHT_COLLAPSED = {
+  image: 'max-h-[max(24rem,calc(100vh-180px))]',
+  pdf: 'h-[max(24rem,calc(100vh-180px))]',
+};
+type ChatScope = 'document' | 'selected' | 'results' | 'all';
+
 const SEARCH_DEBOUNCE_MS = 400;
 // Matches MAX_DOCUMENTS_FOR_CHAT in backend/src/routes/llm.ts
 const MAX_CHAT_DOCUMENTS = 5;
-const CHAT_SCOPES: ChatScope[] = ['selected', 'results', 'all'];
+const CHAT_SCOPES: ChatScope[] = ['document', 'selected', 'results', 'all'];
 
 // At Tailwind's xl breakpoint the chat is a side column; below it, a slide-over drawer.
 const isWideScreen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches;
@@ -45,9 +57,23 @@ export const AlfrescoDocuments: React.FC = () => {
   // The query actually sent to Alfresco, updated once typing pauses
   const [activeQuery, setActiveQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize('alfrescoDocumentsPageSize');
+  const handlePageSizeChange = (size: number) => {
+    setCurrentPage(pageAfterResize(currentPage, pageSize, size));
+    setPageSize(size);
+  };
   const [refreshCount, setRefreshCount] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
-  const isCollapsed = listCollapsed && !!selectedDoc;
+  // Two ticked documents shown side by side, in place of the details panel
+  const [comparing, setComparing] = useState<[AlfrescoDocument, AlfrescoDocument] | null>(null);
+  const hasSidePanel = !!selectedDoc || !!comparing;
+  const isCollapsed = listCollapsed && hasSidePanel;
+
+  // Opening a single document ends a comparison.
+  const showDocument = (doc: AlfrescoDocument) => {
+    setComparing(null);
+    setSelectedDoc(doc);
+  };
   const requestRef = useRef(0);
 
   const closeDetails = () => {
@@ -119,7 +145,7 @@ export const AlfrescoDocuments: React.FC = () => {
     setLoading(true);
     setLoadError(null);
     api
-      .searchAlfrescoDocuments(activeQuery, currentPage, PAGE_SIZE)
+      .searchAlfrescoDocuments(activeQuery, currentPage, pageSize)
       .then(result => {
         if (requestId !== requestRef.current) return;
         setDocuments(result.documents);
@@ -135,7 +161,7 @@ export const AlfrescoDocuments: React.FC = () => {
       .finally(() => {
         if (requestId === requestRef.current) setLoading(false);
       });
-  }, [ready, activeQuery, currentPage, refreshCount]);
+  }, [ready, activeQuery, currentPage, pageSize, refreshCount]);
 
   const refresh = () => setRefreshCount(c => c + 1);
 
@@ -152,6 +178,30 @@ export const AlfrescoDocuments: React.FC = () => {
     updateSelection(next);
   };
 
+  const startCompare = async () => {
+    // In the order they were ticked, so the first pick is on the left. Ticked
+    // documents can be on other pages of results, so fetch any not loaded.
+    const ids = [...selectedIds];
+    if (ids.length !== 2) return;
+    try {
+      const docs = await Promise.all(ids.map(id => documents.find(d => d.id === id) ?? api.getAlfrescoDocument(id)));
+      setComparing([docs[0], docs[1]]);
+      setListCollapsed(true);
+    } catch (error) {
+      console.error('Failed to load documents to compare:', error);
+    }
+  };
+
+  const closeCompare = () => {
+    setComparing(null);
+    setListCollapsed(false);
+  };
+
+  // Unticking a compared document ends the comparison.
+  useEffect(() => {
+    if (comparing && !comparing.every(doc => selectedIds.has(doc.id))) closeCompare();
+  }, [selectedIds]);
+
   const setSelected = (ids: string[], selected: boolean) => {
     const next = new Set(selectedIds);
     for (const id of ids) {
@@ -161,63 +211,175 @@ export const AlfrescoDocuments: React.FC = () => {
     updateSelection(next);
   };
 
-  const handleSourceClick = async (documentId: string) => {
-    // Sources can be on another page of results, so fetch them when needed.
+  // Chat sources and related documents can be on another page of results, so fetch them when needed.
+  const openDocument = async (documentId: string): Promise<boolean> => {
     let doc: AlfrescoDocument | undefined = documents.find(d => d.id === documentId);
     if (!doc) {
       try {
         doc = await api.getAlfrescoDocument(documentId);
       } catch (error) {
         console.error('Failed to load Alfresco document:', error);
-        return;
+        return false;
       }
     }
-    setSelectedDoc(doc);
+    showDocument(doc);
+    return true;
+  };
+
+  const handleSourceClick = async (documentId: string) => {
+    if (!(await openDocument(documentId))) return;
     // The drawer covers the page on smaller screens, so get it out of the way.
     if (!isWideScreen()) setChatOpen(false);
   };
 
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const handleRelatedClick = async (documentId: string) => {
+    if (await openDocument(documentId)) {
+      detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+  const { related, loading: relatedLoading } = useRelatedDocuments(selectedDoc?.id, api.getAlfrescoRelatedDocuments);
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const hasQuery = activeQuery.length > 0;
   const pageIds = documents.map(d => d.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
   const libraryTotal = allTotal ?? totalItems;
 
-  // Fall back when the chosen scope has nothing in it (no selection / no search).
+  // The document open in the details panel (none while comparing)
+  const openDoc = comparing ? null : selectedDoc;
+
+  // Opening a document points the chat at it; ticking documents or picking
+  // another scope moves it elsewhere (the latest action wins).
+  const openDocId = openDoc?.id;
+  useEffect(() => {
+    if (openDocId) setChatScope('document');
+  }, [openDocId]);
+
+  // Fall back when the chosen scope has nothing in it (no open document / selection / search).
   const effectiveScope: ChatScope =
-    chatScope === 'selected' && selectedIds.size === 0
-      ? hasQuery
-        ? 'results'
-        : 'all'
-      : chatScope === 'results' && !hasQuery
-        ? 'all'
-        : chatScope;
+    chatScope === 'document' && !openDoc
+      ? selectedIds.size > 0
+        ? 'selected'
+        : hasQuery
+          ? 'results'
+          : 'all'
+      : chatScope === 'selected' && selectedIds.size === 0
+        ? hasQuery
+          ? 'results'
+          : 'all'
+        : chatScope === 'results' && !hasQuery
+          ? 'all'
+          : chatScope;
 
   const scopeCounts: Record<ChatScope, number> = {
+    document: openDoc ? 1 : 0,
     selected: selectedIds.size,
     results: totalItems,
     all: libraryTotal,
   };
   const scopeDisabled: Record<ChatScope, boolean> = {
+    document: !openDoc,
     selected: selectedIds.size === 0,
     results: !hasQuery,
     all: false,
   };
-  const chatScopeLabel = t(`chat.scope.used.${effectiveScope}`).replace('{count}', String(scopeCounts[effectiveScope]));
+  const chatScopeLabel = t(`chat.scope.used.${effectiveScope}`)
+    .replace('{count}', String(scopeCounts[effectiveScope]))
+    .replace('{name}', openDoc?.filename ?? '');
 
   const sendChatMessage = (query: string, lang: string) =>
     api.chatAlfresco(
       query,
       lang,
-      effectiveScope === 'selected'
-        ? { nodeIds: [...selectedIds] }
-        : effectiveScope === 'results'
-          ? { searchQuery: activeQuery }
-          : {},
+      effectiveScope === 'document' && openDoc
+        ? { nodeIds: [openDoc.id] }
+        : effectiveScope === 'selected'
+          ? { nodeIds: [...selectedIds] }
+          : effectiveScope === 'results'
+            ? { searchQuery: activeQuery }
+            : {},
     );
 
+  // Info tab content, shared by the details panel and the comparison view
+  const renderInfo = (doc: AlfrescoDocument) => (
+    <div className="space-y-3">
+      <div className="space-y-0.5">
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.created')}</strong> {new Date(doc.uploadedAt).toLocaleString()}
+          {doc.alfresco.createdBy && ` (${doc.alfresco.createdBy})`}
+        </p>
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.modified')}</strong> {new Date(doc.alfresco.modifiedAt).toLocaleString()}
+          {doc.alfresco.modifiedBy && ` (${doc.alfresco.modifiedBy})`}
+        </p>
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.type')}</strong> {doc.alfresco.mimeType || doc.fileType.toUpperCase()}
+        </p>
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.size')}</strong> {formatSize(doc.alfresco.sizeInBytes)}
+        </p>
+        {doc.alfresco.name !== doc.filename && (
+          <p className="text-sm text-gray-600 break-all">
+            <strong>{t('alfresco.detail.name')}</strong> {doc.alfresco.name}
+          </p>
+        )}
+        {doc.originalPrompt && (
+          <p className="text-sm text-gray-600">
+            <strong>{t('alfresco.detail.prompt')}</strong> {doc.originalPrompt}
+          </p>
+        )}
+      </div>
+
+      {doc.alfresco.description && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-800 mb-1">{t('alfresco.detail.description')}</h4>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-2 rounded-lg">
+            {doc.alfresco.description}
+          </p>
+        </div>
+      )}
+
+      {doc.alfresco.snippet && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-800 mb-1">{t('alfresco.detail.snippet')}</h4>
+          <p className="text-sm text-gray-700 bg-yellow-50 p-2 rounded-lg">…{doc.alfresco.snippet}…</p>
+        </div>
+      )}
+
+      {doc.keywords.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-800 mb-1">{t('alfresco.detail.keywords')}</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {doc.keywords.map((kw: string, i: number) => (
+              <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!doc.alfresco.exportedByApp && (
+        <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2">
+          ℹ️ {t('alfresco.detail.metadata_only')}
+        </p>
+      )}
+    </div>
+  );
+
+  // Explains what each scope's button really sends to the AI
+  const scopeTitle = (scope: ChatScope): string | undefined =>
+    scope === 'document'
+      ? openDoc?.filename
+      : scope === 'all'
+        ? t('chat.scope.all.hint').replace('{total}', String(scopeCounts.all))
+        : scopeCounts[scope] > MAX_CHAT_DOCUMENTS
+          ? t('chat.scope.limit_hint').replace('{count}', String(scopeCounts[scope]))
+          : undefined;
+
   const chatHeader = (
-    <div className="border-b border-gray-200 p-3 space-y-2">
+    <div className="border-b border-gray-200 p-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-800">{t('chat.heading')}</h3>
         <button
@@ -236,25 +398,27 @@ export const AlfrescoDocuments: React.FC = () => {
               key={scope}
               onClick={() => setChatScope(scope)}
               disabled={scopeDisabled[scope]}
-              className={`flex-1 px-2 py-1 ${i > 0 ? 'border-l border-gray-300' : ''} ${
+              title={scopeTitle(scope)}
+              className={`flex-1 px-1.5 py-1 leading-tight ${i > 0 ? 'border-l border-gray-300' : ''} ${
                 effectiveScope === scope
                   ? 'bg-blue-500 text-white'
                   : 'bg-white text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white'
               }`}
             >
-              {t(`chat.scope.${scope}`)} ({scopeCounts[scope]})
+              {t(`chat.scope.${scope}`)}
+              {(scope === 'selected' || scope === 'results') && ` (${scopeCounts[scope]})`}
             </button>
           ))}
         </div>
         {scopeCounts[effectiveScope] > MAX_CHAT_DOCUMENTS && (
-          <p className="text-[11px] text-gray-400 mt-1">{t('chat.scope.limit_note')}</p>
+          <p className="text-[11px] text-gray-600 mt-1">ℹ️ {t('chat.scope.limit_note')}</p>
         )}
       </div>
     </div>
   );
 
   if (!status) {
-    return <p className="text-center text-gray-500 py-8">{t('alfresco.checking')}</p>;
+    return <p className="text-center text-gray-500 py-6">{t('alfresco.checking')}</p>;
   }
 
   if (!status.configured || !status.connected) {
@@ -286,16 +450,16 @@ ALFRESCO_SITE=demo`}
   }
 
   return (
-    <div className="flex items-start gap-4">
-      <div className="flex-1 min-w-0 flex flex-col md:flex-row items-start gap-4 md:overflow-x-auto pb-2">
+    <div className="flex items-start gap-3">
+      <div className="flex-1 min-w-0 flex flex-col md:flex-row items-start gap-3 md:overflow-x-auto pb-1">
         <div
           className={`bg-white rounded-lg border border-gray-200 w-full ${
-            isCollapsed ? 'p-2 md:w-auto md:flex-shrink-0' : selectedDoc ? 'p-6 md:w-[380px] md:flex-shrink-0' : 'p-6'
+            isCollapsed ? 'p-2 md:w-auto md:flex-shrink-0' : hasSidePanel ? 'p-3 md:w-[360px] md:flex-shrink-0' : 'p-3'
           }`}
         >
           <div
             className={
-              isCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between gap-2 mb-4'
+              isCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between gap-2 mb-2'
             }
           >
             {isCollapsed ? (
@@ -311,7 +475,7 @@ ALFRESCO_SITE=demo`}
               <div className="min-w-0">
                 <h2
                   title={t('alfresco.heading')}
-                  className={`font-bold text-gray-800 truncate ${selectedDoc ? 'text-lg' : 'text-2xl'}`}
+                  className={`font-bold text-gray-800 truncate ${hasSidePanel ? 'text-base' : 'text-xl'}`}
                 >
                   {t('alfresco.heading')}
                 </h2>
@@ -357,7 +521,7 @@ ALFRESCO_SITE=demo`}
               >
                 🔄
               </button>
-              {selectedDoc && (
+              {hasSidePanel && (
                 <button
                   onClick={() => setListCollapsed(c => !c)}
                   title={isCollapsed ? t('documents.list.expand') : t('documents.list.collapse')}
@@ -378,7 +542,7 @@ ALFRESCO_SITE=demo`}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder={t('alfresco.search.placeholder')}
-                  className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  className="w-full pl-9 pr-8 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
                 {searchQuery && (
                   <button
@@ -390,7 +554,7 @@ ALFRESCO_SITE=demo`}
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 text-xs text-gray-600">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs text-gray-600">
                 <span>
                   {hasQuery
                     ? t('documents.search.count')
@@ -404,6 +568,7 @@ ALFRESCO_SITE=demo`}
                       {t('documents.selected_count').replace('{count}', String(selectedIds.size))}
                     </span>
                   )}
+                  {selectedIds.size > 0 && <CompareButton selectedCount={selectedIds.size} onClick={startCompare} />}
                   {pageIds.length > 0 && !allPageSelected && (
                     <button onClick={() => setSelected(pageIds, true)} className="text-blue-600 hover:underline">
                       {t('documents.select.page')}
@@ -418,7 +583,7 @@ ALFRESCO_SITE=demo`}
               </div>
 
               {loading ? (
-                <p className="text-center text-gray-500 py-8">{t('alfresco.loading')}</p>
+                <p className="text-center text-gray-500 py-6">{t('alfresco.loading')}</p>
               ) : loadError ? (
                 <div className="text-center py-8 space-y-2">
                   <p className="text-red-600 text-sm">
@@ -429,32 +594,33 @@ ALFRESCO_SITE=demo`}
                   </button>
                 </div>
               ) : documents.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">
+                <p className="text-center text-gray-500 py-6">
                   {hasQuery ? t('documents.search.no_results') : t('alfresco.empty')}
                 </p>
               ) : (
                 <>
                   {viewMode === 'thumbnail' ? (
                     <div
-                      className={`grid gap-4 ${
-                        selectedDoc ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                      className={`grid gap-3 ${
+                        hasSidePanel ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
                       }`}
                     >
                       {documents.map(doc => (
                         <DocumentCard
                           key={doc.id}
                           document={doc}
-                          onClick={d => setSelectedDoc(d as AlfrescoDocument)}
+                          onClick={d => showDocument(d as AlfrescoDocument)}
                           selected={selectedIds.has(doc.id)}
                           onToggleSelect={toggleSelect}
                           summary={getSummary(doc)}
+                          thumbnailUrl={api.getAlfrescoDocumentThumbnailUrl(doc.id)}
                         />
                       ))}
                     </div>
                   ) : (
                     <DocumentListView
                       documents={documents}
-                      onClick={d => setSelectedDoc(d as AlfrescoDocument)}
+                      onClick={d => showDocument(d as AlfrescoDocument)}
                       selectedIds={selectedIds}
                       onToggleSelect={toggleSelect}
                       onSelectAll={selected => setSelected(pageIds, selected)}
@@ -462,18 +628,37 @@ ALFRESCO_SITE=demo`}
                       getSummary={d => getSummary(d as AlfrescoDocument)}
                     />
                   )}
-                  <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    pageSize={pageSize}
+                    totalItems={totalItems}
+                    onPageSizeChange={handlePageSizeChange}
+                  />
                 </>
               )}
             </>
           )}
         </div>
 
-        {selectedDoc && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200 w-full md:flex-1 md:min-w-[320px] lg:sticky lg:top-6 self-start">
-            <div className="flex items-start justify-between mb-4">
+        {comparing && (
+          <CompareView
+            documents={comparing}
+            getFileUrl={api.getAlfrescoDocumentContentUrl}
+            renderInfo={renderInfo}
+            onClose={closeCompare}
+          />
+        )}
+
+        {!comparing && selectedDoc && (
+          <div
+            ref={detailsRef}
+            className="bg-white p-4 rounded-lg border border-gray-200 w-full md:flex-1 md:min-w-[320px] lg:sticky lg:top-[60px] lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto self-start scroll-mt-16"
+          >
+            <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
-                <h3 className="text-xl font-bold text-gray-800 break-words">{selectedDoc.filename}</h3>
+                <h3 className="text-lg font-bold text-gray-800 break-words">{selectedDoc.filename}</h3>
                 {selectedDoc.alfresco.path && (
                   <p className="text-xs text-gray-500 mt-1 break-all">📁 {selectedDoc.alfresco.path}</p>
                 )}
@@ -488,7 +673,7 @@ ALFRESCO_SITE=demo`}
 
             <div
               className={
-                isCollapsed ? 'space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6 md:items-start' : 'space-y-4'
+                isCollapsed ? 'space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 md:items-start' : 'space-y-3'
               }
             >
               <div className="space-y-2">
@@ -496,16 +681,32 @@ ALFRESCO_SITE=demo`}
                   <img
                     src={api.getAlfrescoDocumentContentUrl(selectedDoc.id)}
                     alt={selectedDoc.filename}
-                    className="w-full max-h-96 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                    onClick={() => setListCollapsed(true)}
+                    title={isCollapsed ? undefined : t('documents.preview.expand')}
+                    className={`w-full object-contain rounded-lg border border-gray-200 bg-gray-50 ${
+                      isCollapsed ? PREVIEW_HEIGHT_COLLAPSED.image : 'max-h-96 cursor-zoom-in'
+                    }`}
                   />
                 )}
 
                 {selectedDoc.fileType === 'pdf' && (
-                  <embed
-                    src={api.getAlfrescoDocumentContentUrl(selectedDoc.id)}
-                    type="application/pdf"
-                    className="w-full h-96 rounded-lg border border-gray-200"
-                  />
+                  <div className="relative">
+                    <iframe
+                      title={selectedDoc.filename}
+                      src={api.getAlfrescoDocumentContentUrl(selectedDoc.id)}
+                      className={`block w-full rounded-lg border border-gray-200 ${isCollapsed ? PREVIEW_HEIGHT_COLLAPSED.pdf : 'h-96'}`}
+                    />
+                    {/* Clicks inside the PDF viewer never reach the page, so while the list is
+                        open a transparent layer catches the "enlarge" click. It goes away once
+                        the list is collapsed, so the viewer can be scrolled and zoomed. */}
+                    {!isCollapsed && (
+                      <div
+                        onClick={() => setListCollapsed(true)}
+                        title={t('documents.preview.expand')}
+                        className="absolute inset-0 cursor-zoom-in"
+                      />
+                    )}
+                  </div>
                 )}
 
                 <div className="flex flex-wrap gap-4">
@@ -530,94 +731,32 @@ ALFRESCO_SITE=demo`}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-0.5">
-                  <p className="text-sm text-gray-600">
-                    <strong>{t('alfresco.detail.created')}</strong> {new Date(selectedDoc.uploadedAt).toLocaleString()}
-                    {selectedDoc.alfresco.createdBy && ` (${selectedDoc.alfresco.createdBy})`}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>{t('alfresco.detail.modified')}</strong>{' '}
-                    {new Date(selectedDoc.alfresco.modifiedAt).toLocaleString()}
-                    {selectedDoc.alfresco.modifiedBy && ` (${selectedDoc.alfresco.modifiedBy})`}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>{t('alfresco.detail.type')}</strong>{' '}
-                    {selectedDoc.alfresco.mimeType || selectedDoc.fileType.toUpperCase()}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>{t('alfresco.detail.size')}</strong> {formatSize(selectedDoc.alfresco.sizeInBytes)}
-                  </p>
-                  {selectedDoc.alfresco.name !== selectedDoc.filename && (
-                    <p className="text-sm text-gray-600 break-all">
-                      <strong>{t('alfresco.detail.name')}</strong> {selectedDoc.alfresco.name}
-                    </p>
-                  )}
-                  {selectedDoc.originalPrompt && (
-                    <p className="text-sm text-gray-600">
-                      <strong>{t('alfresco.detail.prompt')}</strong> {selectedDoc.originalPrompt}
-                    </p>
-                  )}
-                </div>
-
-                {selectedDoc.alfresco.description && (
-                  <div>
-                    <h4 className="font-semibold text-gray-800 mb-2">{t('alfresco.detail.description')}</h4>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">
-                      {selectedDoc.alfresco.description}
-                    </p>
-                  </div>
-                )}
-
-                {selectedDoc.alfresco.snippet && (
-                  <div>
-                    <h4 className="font-semibold text-gray-800 mb-2">{t('alfresco.detail.snippet')}</h4>
-                    <p className="text-sm text-gray-700 bg-yellow-50 p-3 rounded-lg">
-                      …{selectedDoc.alfresco.snippet}…
-                    </p>
-                  </div>
-                )}
-
-                {Object.keys(selectedDoc.extractedData).length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-800 mb-2">{t('document.data')}</h4>
-                    <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-                      {Object.entries(selectedDoc.extractedData).map(([key, value]) => (
-                        <div key={key} className="text-sm">
-                          <span className="font-mono text-gray-600">{key}:</span>{' '}
-                          <span className="text-gray-800">
-                            {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDoc.keywords.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-800 mb-2">{t('alfresco.detail.keywords')}</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedDoc.keywords.slice(0, 10).map((kw: string, i: number) => (
-                        <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                          {kw}
-                        </span>
-                      ))}
-                      {selectedDoc.keywords.length > 10 && (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                          +{selectedDoc.keywords.length - 10} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {!selectedDoc.alfresco.exportedByApp && (
-                  <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-3">
-                    ℹ️ {t('alfresco.detail.metadata_only')}
-                  </p>
-                )}
-              </div>
+              <DetailTabs
+                tabs={[
+                  {
+                    id: 'info',
+                    label: t('documents.tab.info'),
+                    content: renderInfo(selectedDoc),
+                  },
+                  {
+                    id: 'data',
+                    label: t('documents.tab.data'),
+                    count: Object.keys(selectedDoc.extractedData).length,
+                    disabled: Object.keys(selectedDoc.extractedData).length === 0,
+                    content: <ExtractedDataList data={selectedDoc.extractedData} />,
+                  },
+                  {
+                    id: 'related',
+                    label: t('documents.tab.related'),
+                    count: related.length,
+                    loading: relatedLoading,
+                    disabled: !relatedLoading && related.length === 0,
+                    content: (
+                      <RelatedDocuments related={related} loading={relatedLoading} onSelect={handleRelatedClick} />
+                    ),
+                  },
+                ]}
+              />
             </div>
           </div>
         )}
@@ -626,7 +765,7 @@ ALFRESCO_SITE=demo`}
       {/* Chat: kept mounted while hidden so the conversation survives closing it */}
       {chatOpen && <div className="fixed inset-0 bg-black/30 z-20 xl:hidden" onClick={() => setChatOpen(false)} />}
       <aside
-        className={`${chatOpen ? '' : 'hidden'} fixed inset-y-0 right-0 z-30 w-full sm:w-[400px] p-2 bg-gray-50 xl:p-0 xl:bg-transparent xl:z-auto xl:sticky xl:top-16 xl:w-[360px] xl:h-[calc(100vh-5rem)] xl:flex-shrink-0`}
+        className={`${chatOpen ? '' : 'hidden'} fixed inset-y-0 right-0 z-30 w-full sm:w-[400px] p-2 bg-gray-50 xl:p-0 xl:bg-transparent xl:z-auto xl:sticky xl:top-[60px] xl:w-[340px] xl:h-[calc(100vh-72px)] xl:flex-shrink-0`}
       >
         <ChatPanel
           disabled={libraryTotal === 0}

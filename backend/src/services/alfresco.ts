@@ -1,6 +1,6 @@
 import axios from 'axios';
 import FormData from 'form-data';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import { Readable } from 'stream';
 import { AlfrescoDocument, Document } from '../types/index.js';
 
@@ -102,10 +102,31 @@ function toFileType(mimeType: string | undefined): Document['fileType'] {
   return 'text';
 }
 
+// Keeps cm:title short enough to read in Share's lists and detail pages.
+const MAX_TITLE_LENGTH = 255;
+const TITLE_KEYWORD_SEPARATOR = ', ';
+
+// The extracted keywords as a cm:title, dropping whole keywords from the end
+// (rather than cutting one in half) once the title would get too long.
+function keywordTitle(keywords: string[], fallback: string): string {
+  let title = '';
+  for (const keyword of keywords.map(k => k.trim()).filter(Boolean)) {
+    const next = title ? `${title}${TITLE_KEYWORD_SEPARATOR}${keyword}` : keyword;
+    if (next.length > MAX_TITLE_LENGTH) break;
+    title = next;
+  }
+  // A single keyword longer than the limit still gets in, cut short
+  if (!title && keywords.length > 0) title = keywords[0].trim().slice(0, MAX_TITLE_LENGTH);
+  return title || fallback;
+}
+
 // Documents exported by this app carry their extraction results as JSON in cm:description.
-function parseExportedDescription(
-  description: unknown,
-): { originalPrompt?: string; extractedData?: Record<string, any>; keywords?: string[] } | null {
+function parseExportedDescription(description: unknown): {
+  filename?: string;
+  originalPrompt?: string;
+  extractedData?: Record<string, any>;
+  keywords?: string[];
+} | null {
   if (typeof description !== 'string' || !description.trim().startsWith('{')) return null;
   try {
     const parsed = JSON.parse(description);
@@ -118,17 +139,14 @@ function parseExportedDescription(
 
 export class AlfrescoService {
   private baseUrl: string;
-  private username: string;
-  private password: string;
+  private authHeader: string;
   private site: string;
   private searchUrl: string;
-  private token: string | null = null;
   private docLibraryId: string | null = null;
 
   constructor(config: AlfrescoConfig) {
     this.baseUrl = config.baseUrl;
-    this.username = config.username;
-    this.password = config.password;
+    this.authHeader = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`;
     this.site = config.site || 'demo';
     this.searchUrl = config.searchUrl || deriveSearchUrl(config.baseUrl);
   }
@@ -137,26 +155,8 @@ export class AlfrescoService {
     return this.site;
   }
 
-  private async authHeaders(): Promise<Record<string, string>> {
-    if (!this.token) {
-      await this.authenticate();
-    }
-    return { Authorization: `Basic ${this.token}` };
-  }
-
-  /**
-   * Authenticate using Basic Auth
-   */
-  async authenticate(): Promise<string> {
-    try {
-      // Create Basic Auth header
-      const auth = Buffer.from(`${this.username}:${this.password}`).toString('base64');
-      this.token = auth;
-      return this.token;
-    } catch (error) {
-      console.error('Alfresco authentication error:', error);
-      throw error;
-    }
+  private authHeaders(): Record<string, string> {
+    return { Authorization: this.authHeader };
   }
 
   /**
@@ -164,14 +164,7 @@ export class AlfrescoService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-      const response = await axios.get(`${this.baseUrl}/nodes/-root-`, {
-        headers: {
-          Authorization: `Basic ${this.token}`,
-        },
-      });
+      const response = await axios.get(`${this.baseUrl}/nodes/-root-`, { headers: this.authHeaders() });
       return response.status === 200;
     } catch (error) {
       console.error('Alfresco connection test failed:', describeError(error));
@@ -187,7 +180,7 @@ export class AlfrescoService {
     try {
       // Get all containers for the site
       const response = await axios.get(`${this.baseUrl}/sites/${encodeURIComponent(this.site)}/containers`, {
-        headers: await this.authHeaders(),
+        headers: this.authHeaders(),
       });
 
       // Find the documentLibrary container
@@ -212,15 +205,10 @@ export class AlfrescoService {
    */
   async storeDocumentData(document: Document, filePath: string): Promise<AlfrescoExportResult> {
     try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-
       // Get the site's document library
       const docLibraryId = await this.getSiteDocumentLibrary();
 
-      // Read the binary file synchronously
-      const fileContent = fs.readFileSync(filePath);
+      const fileContent = await fs.readFile(filePath);
 
       // Get file extension
       const fileExt =
@@ -240,10 +228,7 @@ export class AlfrescoService {
         `${this.baseUrl}/nodes/${docLibraryId}/children?autoRename=true`,
         formData,
         {
-          headers: {
-            ...formData.getHeaders(),
-            Authorization: `Basic ${this.token}`,
-          },
+          headers: { ...formData.getHeaders(), ...this.authHeaders() },
         },
       );
 
@@ -253,11 +238,14 @@ export class AlfrescoService {
         throw new Error('File uploaded but no node ID returned');
       }
 
-      // Store the extracted data as JSON in standard Alfresco fields
+      // Store the extracted data as JSON in standard Alfresco fields. The title
+      // holds the keywords; the original filename (the node is named with a
+      // timestamp to keep it unique) goes in the JSON.
       const simpleProperties = {
-        'cm:title': document.filename,
+        'cm:title': keywordTitle(document.keywords, document.filename),
         'cm:description': JSON.stringify(
           {
+            filename: document.filename,
             uploadedAt: document.uploadedAt,
             originalPrompt: document.originalPrompt,
             extractedData: document.extractedData,
@@ -275,10 +263,7 @@ export class AlfrescoService {
           `${this.baseUrl}/nodes/${nodeId}`,
           { properties: simpleProperties },
           {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Basic ${this.token}`,
-            },
+            headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
           },
         );
 
@@ -297,10 +282,7 @@ export class AlfrescoService {
         message: `File exported to ${this.site} site with metadata properties`,
       };
     } catch (error) {
-      console.error(
-        'Error storing document in Alfresco:',
-        axios.isAxiosError(error) ? (error.response?.data ?? error.message) : error,
-      );
+      console.error('Error storing document in Alfresco:', describeError(error));
       throw error;
     }
   }
@@ -312,12 +294,12 @@ export class AlfrescoService {
     try {
       const docLibraryId = await this.getSiteDocumentLibrary();
       const response = await axios.get(`${this.baseUrl}/nodes/${docLibraryId}/children?maxItems=100`, {
-        headers: await this.authHeaders(),
+        headers: this.authHeaders(),
       });
 
       return response.data.list.entries;
     } catch (error) {
-      console.error('Error listing documents:', error);
+      console.error('Error listing documents:', describeError(error));
       throw error;
     }
   }
@@ -358,7 +340,7 @@ export class AlfrescoService {
           ...(terms.length === 0 ? { sort: [{ type: 'FIELD', field: 'cm:created', ascending: false }] } : {}),
           highlight: { fields: [{ field: 'cm:content' }], snippetCount: 1, fragmentSize: 160 },
         },
-        { headers: { ...(await this.authHeaders()), 'Content-Type': 'application/json' } },
+        { headers: { ...this.authHeaders(), 'Content-Type': 'application/json' } },
       );
       const entries: { entry: AlfrescoNode }[] = response.data.list.entries;
       return {
@@ -386,7 +368,7 @@ export class AlfrescoService {
     const node = await this.getSiteNode(nodeId);
     try {
       const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}/content`, {
-        headers: await this.authHeaders(),
+        headers: this.authHeaders(),
         responseType: 'stream',
       });
       return {
@@ -400,6 +382,37 @@ export class AlfrescoService {
     }
   }
 
+  /**
+   * Stream the document's "doclib" thumbnail rendition, or null when Alfresco
+   * hasn't made it yet. Renditions are created on request, so a missing one is
+   * requested here (as Share does when browsing) and is ready on a later load.
+   */
+  async getSiteDocumentThumbnail(nodeId: string): Promise<{ stream: Readable; mimeType: string } | null> {
+    await this.getSiteNode(nodeId);
+    const headers = this.authHeaders();
+    try {
+      const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}/renditions/doclib/content`, {
+        headers,
+        responseType: 'stream',
+      });
+      const contentType = response.headers['content-type'];
+      return { stream: response.data, mimeType: typeof contentType === 'string' ? contentType : 'image/png' };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        // Already requested (409) or no thumbnail possible for this file type: nothing to do either way.
+        axios
+          .post(
+            `${this.baseUrl}/nodes/${nodeId}/renditions`,
+            { id: 'doclib' },
+            { headers: { ...headers, 'Content-Type': 'application/json' } },
+          )
+          .catch(() => {});
+        return null;
+      }
+      throw this.wrapError(error, 'Failed to load thumbnail');
+    }
+  }
+
   // Fetches a node and rejects anything outside the site's document library, so
   // the browsing endpoints can't be used to read other parts of the repository.
   private async getSiteNode(nodeId: string): Promise<AlfrescoNode> {
@@ -410,7 +423,7 @@ export class AlfrescoService {
     let node: AlfrescoNode;
     try {
       const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}`, {
-        headers: await this.authHeaders(),
+        headers: this.authHeaders(),
         params: { include: 'properties,path' },
       });
       node = response.data.entry;
@@ -429,13 +442,17 @@ export class AlfrescoService {
   private toAppDocument(node: AlfrescoNode): AlfrescoDocument {
     const props = node.properties || {};
     const exported = parseExportedDescription(props['cm:description']);
-    const title = typeof props['cm:title'] === 'string' && props['cm:title'].trim() ? props['cm:title'] : node.name;
+    const title = typeof props['cm:title'] === 'string' && props['cm:title'].trim() ? props['cm:title'] : undefined;
+    // Exports keep the original filename in their JSON (older exports had it in
+    // cm:title, newer ones put keywords there); other documents are shown by
+    // their own title, as set in Alfresco, or their name.
+    const displayName = (exported ? exported.filename || title : title) || node.name;
     const highlight = node.search?.highlight?.find(h => h.field === 'cm:content')?.snippets?.[0];
     const origin = this.baseUrl.match(/^https?:\/\/[^/]+/)?.[0];
 
     return {
       id: node.id,
-      filename: title,
+      filename: displayName,
       uploadedAt: node.createdAt,
       originalPrompt: exported?.originalPrompt || '',
       extractedData: exported?.extractedData || {},
@@ -468,47 +485,5 @@ export class AlfrescoService {
       return new AlfrescoError('Alfresco rejected the configured credentials', 502);
     }
     return new AlfrescoError(message, 502);
-  }
-
-  /**
-   * Get document metadata from Alfresco
-   */
-  async getDocument(nodeId: string): Promise<AlfrescoNodeEntry['entry']> {
-    try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-
-      const response = await axios.get(`${this.baseUrl}/nodes/${nodeId}`, {
-        headers: {
-          Authorization: `Basic ${this.token}`,
-        },
-      });
-
-      return response.data.entry;
-    } catch (error) {
-      console.error('Error getting document:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete document from Alfresco
-   */
-  async deleteDocument(nodeId: string): Promise<void> {
-    try {
-      if (!this.token) {
-        await this.authenticate();
-      }
-
-      await axios.delete(`${this.baseUrl}/nodes/${nodeId}`, {
-        headers: {
-          Authorization: `Basic ${this.token}`,
-        },
-      });
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      throw error;
-    }
   }
 }

@@ -1,4 +1,4 @@
-import { PORT } from './config/env.js';
+import { CORS_ORIGINS, PORT } from './config/env.js';
 import express from 'express';
 import * as path from 'path';
 import * as url from 'url';
@@ -22,9 +22,13 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -36,8 +40,8 @@ const fileProcessor = new FileProcessor(ollama);
 const search = new SearchService(storage);
 
 // Routes
-app.use('/api/upload', createUploadRouter(storage, fileProcessor, ollama, search));
-app.use('/api/documents', createDocumentsRouter(storage));
+app.use('/api/upload', createUploadRouter(storage, fileProcessor, ollama));
+app.use('/api/documents', createDocumentsRouter(storage, search, fileProcessor));
 app.use('/api/prompts', createPromptsRouter(storage));
 app.use('/api/llm', createLLMRouter(storage, search, ollama));
 app.use('/api/alfresco', createAlfrescoExportRouter(storage));
@@ -59,8 +63,8 @@ async function start() {
       const model = await ollama.selectModel();
       console.log(`Using LLM model: ${model}`);
     } catch (error) {
-      console.error('Ollama not available - make sure Ollama is running');
-      console.error('Download Ollama from https://ollama.com and run: ollama pull gemma3');
+      // The message says what to fix (start Ollama, install a model, set OLLAMA_MODEL)
+      console.error(error instanceof Error ? error.message : error);
     }
 
     app.listen(PORT, () => {

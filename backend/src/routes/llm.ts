@@ -9,6 +9,11 @@ export const MAX_DOCUMENTS_FOR_CHAT = 5;
 export function createLLMRouter(storage: StorageService, search: SearchService, ollama: OllamaService): Router {
   const router = Router();
 
+  // Whether Ollama is reachable with a usable model (checked afresh each call)
+  router.get('/status', async (req, res) => {
+    res.json(await ollama.checkStatus());
+  });
+
   router.post('/chat', async (req, res) => {
     try {
       const { query, documentIds } = req.body;

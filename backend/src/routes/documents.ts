@@ -1,6 +1,14 @@
 import { Router } from 'express';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { StorageService } from '../services/storage.js';
+import { SearchService } from '../services/search.js';
+import { FileProcessor } from '../services/file-processor.js';
+
+// Thumbnails never change for a given document id
+const THUMBNAIL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+const MAX_RELATED_DOCUMENTS = 5;
 
 const CONTENT_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -10,7 +18,11 @@ const CONTENT_TYPES: Record<string, string> = {
   '.txt': 'text/plain',
 };
 
-export function createDocumentsRouter(storage: StorageService): Router {
+export function createDocumentsRouter(
+  storage: StorageService,
+  search: SearchService,
+  fileProcessor: FileProcessor,
+): Router {
   const router = Router();
 
   router.get('/', async (req, res) => {
@@ -31,6 +43,57 @@ export function createDocumentsRouter(storage: StorageService): Router {
       res.json(doc);
     } catch (error) {
       res.status(500).json({ error: 'Failed to load document' });
+    }
+  });
+
+  router.get('/:id/related', async (req, res) => {
+    try {
+      const doc = await storage.loadDocument(req.params.id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      const related = await search.findRelatedDocuments(req.params.id, MAX_RELATED_DOCUMENTS);
+      res.json(
+        related.map(({ doc: relatedDoc, score }) => ({
+          id: relatedDoc.id,
+          filename: relatedDoc.filename,
+          fileType: relatedDoc.fileType,
+          summary: search.getDocumentSummary(relatedDoc),
+          score,
+        })),
+      );
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to find related documents' });
+    }
+  });
+
+  // Text files have no thumbnail (404); the UI shows a file-type icon instead.
+  router.get('/:id/thumbnail', async (req, res) => {
+    try {
+      const doc = await storage.loadDocument(req.params.id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      if (doc.fileType === 'image') {
+        return res.sendFile(await storage.getThumbnailPath(doc.id), { maxAge: THUMBNAIL_MAX_AGE_MS });
+      }
+      if (doc.fileType === 'pdf') {
+        const thumbnailPath = storage.getPdfThumbnailPath(doc.id);
+        try {
+          await fs.access(thumbnailPath);
+        } catch {
+          const originalPath = await storage.getOriginalFilePath(doc.id);
+          if (!originalPath) {
+            return res.status(404).json({ error: 'File not found' });
+          }
+          await fs.writeFile(thumbnailPath, await fileProcessor.renderPdfThumbnail(originalPath));
+        }
+        return res.sendFile(thumbnailPath, { maxAge: THUMBNAIL_MAX_AGE_MS });
+      }
+      res.status(404).json({ error: 'No thumbnail for this file type' });
+    } catch (error) {
+      console.error('Thumbnail error:', error);
+      res.status(500).json({ error: 'Failed to load thumbnail' });
     }
   });
 
@@ -61,6 +124,9 @@ export function createDocumentsRouter(storage: StorageService): Router {
 
   router.delete('/:id', async (req, res) => {
     try {
+      if (!(await storage.loadDocument(req.params.id))) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
       await storage.deleteDocument(req.params.id);
       res.json({ success: true });
     } catch (error) {

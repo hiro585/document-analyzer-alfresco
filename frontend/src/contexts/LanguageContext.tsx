@@ -66,7 +66,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     (key: string): string => {
       const translation = translations[key];
       if (!translation) {
-        console.warn(`✗ Translation key not found: ${key}`);
+        // Every key is missing until translations.xml has loaded
+        if (Object.keys(translations).length > 0) console.warn(`Translation key not found: ${key}`);
         return key;
       }
       const result = translation[language];

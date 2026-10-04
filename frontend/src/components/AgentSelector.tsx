@@ -11,7 +11,6 @@ export interface AgentOption {
 export const AVAILABLE_AGENTS: AgentOption[] = [
   { id: 'fraud-detection', name: 'agent.fraud_detection.name', description: 'agent.fraud_detection.description' },
   { id: 'missing-info', name: 'agent.missing_info.name', description: 'agent.missing_info.description' },
-  { id: 'similar-documents', name: 'agent.similar_documents.name', description: 'agent.similar_documents.description' },
   {
     id: 'record-match',
     name: 'agent.record_match.name',
@@ -47,12 +46,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-2">{t('agents.label')}</label>
-      <div className="space-y-2">
+      <label className="block text-sm font-semibold text-gray-700 mb-1">{t('agents.label')}</label>
+      <div className="grid gap-2 sm:grid-cols-2">
         {AVAILABLE_AGENTS.map(agent => (
           <label
             key={agent.id}
-            className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+            className={`flex items-start gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${
               selected.includes(agent.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
             } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           >

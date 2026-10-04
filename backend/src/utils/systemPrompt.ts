@@ -29,64 +29,6 @@ When extracting data, provide it in a clear, machine-readable format when possib
 }
 
 /**
- * Build a data extraction prompt that respects the selected language
- * Used when extracting data from documents
- */
-export function buildExtractionPrompt(userPrompt: string, language: Language = 'en'): string {
-  const systemPrompt = buildSystemPrompt(language);
-
-  if (language === 'ja') {
-    return `${systemPrompt}
-
-ユーザーリクエスト: ${userPrompt}
-
-指示：
-- 必ず日本語で回答してください
-- 英語の単語は使用しないでください
-- 自然で流暢な日本語で提供してください
-- 抽出された情報は構造化された形式で提供してください
-- 可能であればJSON形式で回答してください`;
-  }
-
-  return `${systemPrompt}
-
-User Request: ${userPrompt}
-
-Provide the extracted information in a structured format. If possible, use JSON format for the response.`;
-}
-
-/**
- * Build a chat/query prompt that respects the selected language
- * Used when answering questions about documents
- */
-export function buildChatPrompt(query: string, language: Language = 'en'): string {
-  const systemPrompt = buildSystemPrompt(language);
-
-  if (language === 'ja') {
-    return `${systemPrompt}
-
-以下の質問に日本語で回答してください。必ず日本語のみを使用してください：
-${query}`;
-  }
-
-  return `${systemPrompt}
-
-Answer the following question in English:
-${query}`;
-}
-
-/**
- * Get language display name
- */
-export function getLanguageName(language: Language): string {
-  const names: Record<Language, string> = {
-    en: 'English',
-    ja: '日本語 (Japanese)',
-  };
-  return names[language] || 'English';
-}
-
-/**
  * Validate language parameter
  */
 export function isValidLanguage(lang: unknown): lang is Language {

@@ -1,25 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import React, { useState, useEffect, useRef } from 'react';
+import { api, apiErrorMessage } from '../api/client';
 import { ChatPanel } from '../components/ChatPanel';
 import { DocumentCard } from '../components/DocumentCard';
 import { DocumentListView } from '../components/DocumentListView';
-import { Pagination } from '../components/Pagination';
+import { Pagination, usePageSize, pageAfterResize } from '../components/Pagination';
+import { RelatedDocuments } from '../components/RelatedDocuments';
 import { EvaluationResults } from '../components/EvaluationResults';
 import { OcrTextViewer } from '../components/OcrTextViewer';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { Document } from '../types';
+import { useRelatedDocuments } from '../hooks/useRelatedDocuments';
+import { DetailTabs } from '../components/DetailTabs';
+import { ExtractedDataList } from '../components/ExtractedDataList';
+import { CompareButton, CompareView } from '../components/CompareView';
 
 interface DocumentsPageProps {
   refreshTrigger?: number;
 }
 
 type ViewMode = 'thumbnail' | 'list';
-type ChatScope = 'selected' | 'results' | 'all';
 
-const PAGE_SIZE = 10;
+// With the list collapsed the preview sits beside the details, so it can use
+// the panel's full height (the panel is capped at 100vh - 72px; its padding,
+// title and the "open original" link take the rest). Never below the normal 24rem.
+const PREVIEW_HEIGHT_COLLAPSED = {
+  image: 'max-h-[max(24rem,calc(100vh-180px))]',
+  pdf: 'h-[max(24rem,calc(100vh-180px))]',
+};
+type ChatScope = 'document' | 'selected' | 'results' | 'all';
+
 // Matches MAX_DOCUMENTS_FOR_CHAT in backend/src/routes/llm.ts
 const MAX_CHAT_DOCUMENTS = 5;
-const CHAT_SCOPES: ChatScope[] = ['selected', 'results', 'all'];
+const CHAT_SCOPES: ChatScope[] = ['document', 'selected', 'results', 'all'];
 
 // At Tailwind's xl breakpoint the chat is a side column; below it, a slide-over drawer.
 const isWideScreen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches;
@@ -31,10 +43,40 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize('documentsPageSize');
+  const handlePageSizeChange = (size: number) => {
+    setCurrentPage(pageAfterResize(currentPage, pageSize, size));
+    setPageSize(size);
+  };
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<Record<string, string>>({});
   const [listCollapsed, setListCollapsed] = useState(false);
-  const isCollapsed = listCollapsed && !!selectedDoc;
+  // Two ticked documents shown side by side, in place of the details panel
+  const [comparing, setComparing] = useState<[Document, Document] | null>(null);
+  const hasSidePanel = !!selectedDoc || !!comparing;
+  const isCollapsed = listCollapsed && hasSidePanel;
+  const detailsRef = useRef<HTMLDivElement>(null);
+
+  // Opening a single document ends a comparison.
+  const showDocument = (doc: Document) => {
+    setComparing(null);
+    setSelectedDoc(doc);
+  };
+
+  const handleRelatedClick = async (documentId: string) => {
+    let doc = documents.find(d => d.id === documentId);
+    if (!doc) {
+      try {
+        doc = await api.getDocument(documentId);
+      } catch (error) {
+        console.error('Failed to load document:', error);
+        return;
+      }
+    }
+    showDocument(doc);
+    detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const { related, loading: relatedLoading } = useRelatedDocuments(selectedDoc?.id, api.getRelatedDocuments);
 
   const closeDetails = () => {
     setSelectedDoc(null);
@@ -101,10 +143,28 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     updateSelection(next);
   };
 
+  const startCompare = () => {
+    // In the order they were ticked, so the first pick is on the left
+    const docs = [...selectedIds].flatMap(id => documents.filter(d => d.id === id));
+    if (docs.length !== 2) return;
+    setComparing([docs[0], docs[1]]);
+    setListCollapsed(true);
+  };
+
+  const closeCompare = () => {
+    setComparing(null);
+    setListCollapsed(false);
+  };
+
+  // Unticking (or deleting) a compared document ends the comparison.
+  useEffect(() => {
+    if (comparing && !comparing.every(doc => selectedIds.has(doc.id))) closeCompare();
+  }, [selectedIds]);
+
   const handleSourceClick = (documentId: string) => {
     const doc = documents.find(d => d.id === documentId);
     if (!doc) return;
-    setSelectedDoc(doc);
+    showDocument(doc);
     // The drawer covers the page on smaller screens, so get it out of the way.
     if (!isWideScreen()) setChatOpen(false);
   };
@@ -134,7 +194,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     try {
       await api.deleteDocument(docId);
       setDocuments(docs => docs.filter(d => d.id !== docId));
-      closeDetails();
+      if (selectedDoc?.id === docId) closeDetails();
     } catch (error) {
       console.error('Failed to delete document:', error);
     }
@@ -145,10 +205,12 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     try {
       const result = await api.exportDocumentToAlfresco(docId);
       if (result.success) {
-        setExportStatus(prev => ({
-          ...prev,
-          [docId]: `✅ Exported to Alfresco (Node: ${result.data.nodeId})`,
-        }));
+        // Success shows as the "Exported to Alfresco" line under the filename;
+        // the status message is only for failures, so clear any earlier one.
+        setExportStatus(prev => {
+          const { [docId]: _previous, ...rest } = prev;
+          return rest;
+        });
         // Update selected document
         setSelectedDoc(prev =>
           prev?.id === docId
@@ -160,13 +222,13 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
       } else {
         setExportStatus(prev => ({
           ...prev,
-          [docId]: `❌ Export failed: ${result.error}`,
+          [docId]: `❌ ${t('upload.export.failed')} ${result.error}`,
         }));
       }
     } catch (error) {
       setExportStatus(prev => ({
         ...prev,
-        [docId]: `❌ Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        [docId]: `❌ ${t('upload.export.failed')} ${apiErrorMessage(error) ?? t('error.server_unreachable')}`,
       }));
     } finally {
       setExporting(null);
@@ -174,20 +236,20 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
   };
 
   const handleExportAll = async () => {
-    if (!confirm(`Export all ${documents.length} documents to Alfresco?`)) return;
+    if (!confirm(t('documents.export_all.confirm').replace('{count}', String(documents.length)))) return;
     setExporting('all');
     try {
       const result = await api.exportAllToAlfresco();
       if (result.success) {
-        alert(`✅ Exported ${result.exported} documents to Alfresco`);
+        alert(t('documents.export_all.done').replace('{count}', String(result.exported)));
         if (result.failed > 0) {
-          alert(`⚠️ ${result.failed} documents failed to export`);
+          alert(t('documents.export_all.some_failed').replace('{count}', String(result.failed)));
         }
         // Refresh documents list
         loadDocuments();
       }
     } catch (error) {
-      alert(`❌ Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`❌ ${t('upload.export.failed')} ${apiErrorMessage(error) ?? t('error.server_unreachable')}`);
     } finally {
       setExporting(null);
     }
@@ -205,43 +267,104 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
     });
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / PAGE_SIZE));
-  const paginatedDocuments = filteredDocuments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / pageSize));
+  const paginatedDocuments = filteredDocuments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const hasQuery = searchQuery.trim().length > 0;
   const filteredIds = filteredDocuments.map(d => d.id);
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.has(id));
 
-  // Fall back when the chosen scope has nothing in it (no selection / no search).
+  // The document open in the details panel (none while comparing)
+  const openDoc = comparing ? null : selectedDoc;
+
+  // Opening a document points the chat at it; ticking documents or picking
+  // another scope moves it elsewhere (the latest action wins).
+  const openDocId = openDoc?.id;
+  useEffect(() => {
+    if (openDocId) setChatScope('document');
+  }, [openDocId]);
+
+  // Fall back when the chosen scope has nothing in it (no open document / selection / search).
   const effectiveScope: ChatScope =
-    chatScope === 'selected' && selectedIds.size === 0
-      ? hasQuery
-        ? 'results'
-        : 'all'
-      : chatScope === 'results' && !hasQuery
-        ? 'all'
-        : chatScope;
+    chatScope === 'document' && !openDoc
+      ? selectedIds.size > 0
+        ? 'selected'
+        : hasQuery
+          ? 'results'
+          : 'all'
+      : chatScope === 'selected' && selectedIds.size === 0
+        ? hasQuery
+          ? 'results'
+          : 'all'
+        : chatScope === 'results' && !hasQuery
+          ? 'all'
+          : chatScope;
 
   const scopeCounts: Record<ChatScope, number> = {
+    document: openDoc ? 1 : 0,
     selected: selectedIds.size,
     results: filteredDocuments.length,
     all: documents.length,
   };
   const scopeDisabled: Record<ChatScope, boolean> = {
+    document: !openDoc,
     selected: selectedIds.size === 0,
     results: !hasQuery,
     all: false,
   };
   const chatDocumentIds =
-    effectiveScope === 'selected'
-      ? documents.filter(d => selectedIds.has(d.id)).map(d => d.id)
-      : effectiveScope === 'results'
-        ? filteredIds
-        : undefined;
-  const chatScopeLabel = t(`chat.scope.used.${effectiveScope}`).replace('{count}', String(scopeCounts[effectiveScope]));
+    effectiveScope === 'document' && openDoc
+      ? [openDoc.id]
+      : effectiveScope === 'selected'
+        ? documents.filter(d => selectedIds.has(d.id)).map(d => d.id)
+        : effectiveScope === 'results'
+          ? filteredIds
+          : undefined;
+  const chatScopeLabel = t(`chat.scope.used.${effectiveScope}`)
+    .replace('{count}', String(scopeCounts[effectiveScope]))
+    .replace('{name}', openDoc?.filename ?? '');
+
+  // Info tab content, shared by the details panel and the comparison view
+  const renderInfo = (doc: Document) => (
+    <div className="space-y-3">
+      <div className="space-y-0.5">
+        <p className="text-sm text-gray-600">
+          <strong>{t('document.uploaded')}</strong> {new Date(doc.uploadedAt).toLocaleString()}
+        </p>
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.type')}</strong> {doc.fileType.toUpperCase()}
+        </p>
+        <p className="text-sm text-gray-600">
+          <strong>{t('alfresco.detail.prompt')}</strong> {doc.originalPrompt}
+        </p>
+      </div>
+      {doc.keywords.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-800 mb-1">{t('alfresco.detail.keywords')}</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {doc.keywords.map((kw: string, i: number) => (
+              <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Explains what each scope's button really sends to the AI
+  const scopeTitle = (scope: ChatScope): string | undefined =>
+    scope === 'document'
+      ? openDoc?.filename
+      : scope === 'all'
+        ? t('chat.scope.all.hint').replace('{total}', String(scopeCounts.all))
+        : scopeCounts[scope] > MAX_CHAT_DOCUMENTS
+          ? t('chat.scope.limit_hint').replace('{count}', String(scopeCounts[scope]))
+          : undefined;
 
   const chatHeader = (
-    <div className="border-b border-gray-200 p-3 space-y-2">
+    <div className="border-b border-gray-200 p-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-800">{t('chat.heading')}</h3>
         <button
@@ -260,34 +383,36 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
               key={scope}
               onClick={() => setChatScope(scope)}
               disabled={scopeDisabled[scope]}
-              className={`flex-1 px-2 py-1 ${i > 0 ? 'border-l border-gray-300' : ''} ${
+              title={scopeTitle(scope)}
+              className={`flex-1 px-1.5 py-1 leading-tight ${i > 0 ? 'border-l border-gray-300' : ''} ${
                 effectiveScope === scope
                   ? 'bg-blue-500 text-white'
                   : 'bg-white text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white'
               }`}
             >
-              {t(`chat.scope.${scope}`)} ({scopeCounts[scope]})
+              {t(`chat.scope.${scope}`)}
+              {(scope === 'selected' || scope === 'results') && ` (${scopeCounts[scope]})`}
             </button>
           ))}
         </div>
         {scopeCounts[effectiveScope] > MAX_CHAT_DOCUMENTS && (
-          <p className="text-[11px] text-gray-400 mt-1">{t('chat.scope.limit_note')}</p>
+          <p className="text-[11px] text-gray-600 mt-1">ℹ️ {t('chat.scope.limit_note')}</p>
         )}
       </div>
     </div>
   );
 
   return (
-    <div className="flex items-start gap-4">
-      <div className="flex-1 min-w-0 flex flex-col md:flex-row items-start gap-4 md:overflow-x-auto pb-2">
+    <div className="flex items-start gap-3">
+      <div className="flex-1 min-w-0 flex flex-col md:flex-row items-start gap-3 md:overflow-x-auto pb-1">
         <div
           className={`bg-white rounded-lg border border-gray-200 w-full ${
-            isCollapsed ? 'p-2 md:w-auto md:flex-shrink-0' : selectedDoc ? 'p-6 md:w-[380px] md:flex-shrink-0' : 'p-6'
+            isCollapsed ? 'p-2 md:w-auto md:flex-shrink-0' : hasSidePanel ? 'p-3 md:w-[360px] md:flex-shrink-0' : 'p-3'
           }`}
         >
           <div
             className={
-              isCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between gap-2 mb-4'
+              isCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between gap-2 mb-2'
             }
           >
             {isCollapsed ? (
@@ -302,7 +427,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
             ) : (
               <h2
                 title={t('documents.heading')}
-                className={`font-bold text-gray-800 truncate min-w-0 ${selectedDoc ? 'text-lg' : 'text-2xl'}`}
+                className={`font-bold text-gray-800 truncate min-w-0 ${hasSidePanel ? 'text-base' : 'text-xl'}`}
               >
                 {t('documents.heading')}
               </h2>
@@ -339,12 +464,12 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
               </button>
               <button
                 onClick={loadDocuments}
-                title="Refresh documents"
+                title={t('alfresco.refresh')}
                 className="order-4 px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-xs"
               >
                 🔄
               </button>
-              {selectedDoc && (
+              {hasSidePanel && (
                 <button
                   onClick={() => setListCollapsed(c => !c)}
                   title={isCollapsed ? t('documents.list.expand') : t('documents.list.collapse')}
@@ -367,7 +492,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder={t('documents.search.placeholder')}
-                      className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      className="w-full pl-9 pr-8 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                     {hasQuery && (
                       <button
@@ -379,7 +504,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-4 text-xs text-gray-600">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs text-gray-600">
                     <span>
                       {hasQuery
                         ? t('documents.search.count')
@@ -392,6 +517,9 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                         <span className="font-medium text-blue-700">
                           {t('documents.selected_count').replace('{count}', String(selectedIds.size))}
                         </span>
+                      )}
+                      {selectedIds.size > 0 && (
+                        <CompareButton selectedCount={selectedIds.size} onClick={startCompare} />
                       )}
                       {filteredIds.length > 0 && !allFilteredSelected && (
                         <button
@@ -412,17 +540,17 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
               )}
 
               {loading ? (
-                <p className="text-center text-gray-500 py-8">{t('documents.loading')}</p>
+                <p className="text-center text-gray-500 py-6">{t('documents.loading')}</p>
               ) : documents.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">{t('documents.empty')}</p>
+                <p className="text-center text-gray-500 py-6">{t('documents.empty')}</p>
               ) : filteredDocuments.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">{t('documents.search.no_results')}</p>
+                <p className="text-center text-gray-500 py-6">{t('documents.search.no_results')}</p>
               ) : (
                 <>
                   {viewMode === 'thumbnail' ? (
                     <div
-                      className={`grid gap-4 ${
-                        selectedDoc ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                      className={`grid gap-3 ${
+                        hasSidePanel ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
                       }`}
                     >
                       {paginatedDocuments.map(doc => (
@@ -430,9 +558,10 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                           key={doc.id}
                           document={doc}
                           onDelete={handleDelete}
-                          onClick={setSelectedDoc}
+                          onClick={showDocument}
                           selected={selectedIds.has(doc.id)}
                           onToggleSelect={toggleSelect}
+                          thumbnailUrl={doc.fileType !== 'text' ? api.getDocumentThumbnailUrl(doc.id) : undefined}
                         />
                       ))}
                     </div>
@@ -440,7 +569,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                     <DocumentListView
                       documents={paginatedDocuments}
                       onDelete={handleDelete}
-                      onClick={setSelectedDoc}
+                      onClick={showDocument}
                       selectedIds={selectedIds}
                       onToggleSelect={toggleSelect}
                       onSelectAll={selected =>
@@ -451,14 +580,21 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                       }
                     />
                   )}
-                  <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    pageSize={pageSize}
+                    totalItems={filteredDocuments.length}
+                    onPageSizeChange={handlePageSizeChange}
+                  />
 
                   <button
                     onClick={handleExportAll}
                     disabled={exporting === 'all'}
                     className="mt-4 w-full px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded text-sm"
                   >
-                    {exporting === 'all' ? '⏳ Exporting...' : '📤 Export All to Alfresco'}
+                    {exporting === 'all' ? t('upload.export.loading') : t('documents.export_all.button')}
                   </button>
                 </>
               )}
@@ -466,27 +602,67 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
           )}
         </div>
 
-        {selectedDoc && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200 w-full md:flex-1 md:min-w-[320px] lg:sticky lg:top-6 self-start">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-gray-800">{selectedDoc.filename}</h3>
+        {comparing && (
+          <CompareView
+            documents={comparing}
+            getFileUrl={api.getDocumentFileUrl}
+            renderInfo={renderInfo}
+            onClose={closeCompare}
+          />
+        )}
+
+        {!comparing && selectedDoc && (
+          <div
+            ref={detailsRef}
+            className="bg-white p-4 rounded-lg border border-gray-200 w-full md:flex-1 md:min-w-[320px] lg:sticky lg:top-[60px] lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto self-start scroll-mt-16"
+          >
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-gray-800 break-words">{selectedDoc.filename}</h3>
                 {selectedDoc.alfrescoNodeId && (
-                  <p className="text-sm text-green-600 mt-1">
-                    ✅ Exported to Alfresco
-                    {selectedDoc.alfrescoExportedAt &&
-                      ` on ${new Date(selectedDoc.alfrescoExportedAt).toLocaleString()}`}
+                  <p
+                    className="text-sm text-green-600 mt-1"
+                    title={`${t('upload.export.node_id')} ${selectedDoc.alfrescoNodeId}`}
+                  >
+                    {selectedDoc.alfrescoExportedAt
+                      ? t('documents.exported_on').replace(
+                          '{date}',
+                          new Date(selectedDoc.alfrescoExportedAt).toLocaleString(),
+                        )
+                      : t('upload.export.success')}
                   </p>
                 )}
               </div>
-              <button onClick={closeDetails} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">
-                ×
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {!selectedDoc.alfrescoNodeId && (
+                  <button
+                    onClick={() => handleExportToAlfresco(selectedDoc.id)}
+                    disabled={exporting === selectedDoc.id}
+                    className="px-2 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded text-xs whitespace-nowrap"
+                  >
+                    {exporting === selectedDoc.id ? t('upload.export.loading') : t('upload.export.alfresco')}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(selectedDoc.id)}
+                  title={t('documents.delete')}
+                  className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs"
+                >
+                  🗑️
+                </button>
+                <button onClick={closeDetails} className="ml-1 text-gray-500 hover:text-gray-700 text-2xl leading-none">
+                  ×
+                </button>
+              </div>
             </div>
+
+            {exportStatus[selectedDoc.id] && (
+              <div className="mb-3 px-3 py-1.5 bg-gray-50 rounded-lg text-sm">{exportStatus[selectedDoc.id]}</div>
+            )}
 
             <div
               className={
-                isCollapsed ? 'space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6 md:items-start' : 'space-y-4'
+                isCollapsed ? 'space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 md:items-start' : 'space-y-3'
               }
             >
               <div className="space-y-2">
@@ -494,16 +670,32 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                   <img
                     src={api.getDocumentFileUrl(selectedDoc.id)}
                     alt={selectedDoc.filename}
-                    className="w-full max-h-96 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                    onClick={() => setListCollapsed(true)}
+                    title={isCollapsed ? undefined : t('documents.preview.expand')}
+                    className={`w-full object-contain rounded-lg border border-gray-200 bg-gray-50 ${
+                      isCollapsed ? PREVIEW_HEIGHT_COLLAPSED.image : 'max-h-96 cursor-zoom-in'
+                    }`}
                   />
                 )}
 
                 {selectedDoc.fileType === 'pdf' && (
-                  <embed
-                    src={api.getDocumentFileUrl(selectedDoc.id)}
-                    type="application/pdf"
-                    className="w-full h-96 rounded-lg border border-gray-200"
-                  />
+                  <div className="relative">
+                    <iframe
+                      title={selectedDoc.filename}
+                      src={api.getDocumentFileUrl(selectedDoc.id)}
+                      className={`block w-full rounded-lg border border-gray-200 ${isCollapsed ? PREVIEW_HEIGHT_COLLAPSED.pdf : 'h-96'}`}
+                    />
+                    {/* Clicks inside the PDF viewer never reach the page, so while the list is
+                        open a transparent layer catches the "enlarge" click. It goes away once
+                        the list is collapsed, so the viewer can be scrolled and zoomed. */}
+                    {!isCollapsed && (
+                      <div
+                        onClick={() => setListCollapsed(true)}
+                        title={t('documents.preview.expand')}
+                        className="absolute inset-0 cursor-zoom-in"
+                      />
+                    )}
+                  </div>
                 )}
 
                 {(selectedDoc.fileType === 'image' ||
@@ -520,77 +712,47 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
                 )}
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-600">
-                    <strong>Uploaded:</strong> {new Date(selectedDoc.uploadedAt).toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>Type:</strong> {selectedDoc.fileType.toUpperCase()}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>Extraction Prompt:</strong> {selectedDoc.originalPrompt}
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-gray-800 mb-2">Extracted Data:</h4>
-                  <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-                    {Object.entries(selectedDoc.extractedData).map(([key, value]) => (
-                      <div key={key} className="text-sm">
-                        <span className="font-mono text-gray-600">{key}:</span>{' '}
-                        <span className="text-gray-800">
-                          {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-gray-800 mb-2">Keywords:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDoc.keywords.slice(0, 10).map((kw: string, i: number) => (
-                      <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                        {kw}
-                      </span>
-                    ))}
-                    {selectedDoc.keywords.length > 10 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                        +{selectedDoc.keywords.length - 10} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {selectedDoc.evaluations && selectedDoc.evaluations.length > 0 && (
-                  <EvaluationResults evaluations={selectedDoc.evaluations} />
-                )}
-
-                <OcrTextViewer text={selectedDoc.extractedText} ocrUsed={selectedDoc.ocrUsed} />
-
-                {exportStatus[selectedDoc.id] && (
-                  <div className="p-3 bg-gray-50 rounded-lg text-sm">{exportStatus[selectedDoc.id]}</div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                  {!selectedDoc.alfrescoNodeId && (
-                    <button
-                      onClick={() => handleExportToAlfresco(selectedDoc.id)}
-                      disabled={exporting === selectedDoc.id}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded"
-                    >
-                      {exporting === selectedDoc.id ? '⏳ Exporting...' : '📤 Export to Alfresco'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(selectedDoc.id)}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </div>
+              <DetailTabs
+                tabs={[
+                  {
+                    id: 'info',
+                    label: t('documents.tab.info'),
+                    content: renderInfo(selectedDoc),
+                  },
+                  {
+                    id: 'data',
+                    label: t('documents.tab.data'),
+                    count: Object.keys(selectedDoc.extractedData).length,
+                    disabled: Object.keys(selectedDoc.extractedData).length === 0,
+                    content: <ExtractedDataList data={selectedDoc.extractedData} />,
+                  },
+                  {
+                    id: 'related',
+                    label: t('documents.tab.related'),
+                    count: related.length,
+                    loading: relatedLoading,
+                    disabled: !relatedLoading && related.length === 0,
+                    content: (
+                      <RelatedDocuments related={related} loading={relatedLoading} onSelect={handleRelatedClick} />
+                    ),
+                  },
+                  {
+                    id: 'agents',
+                    label: t('documents.tab.agents'),
+                    count: selectedDoc.evaluations?.length ?? 0,
+                    disabled: !selectedDoc.evaluations?.length,
+                    content: <EvaluationResults evaluations={selectedDoc.evaluations ?? []} showHeading={false} />,
+                  },
+                  {
+                    id: 'text',
+                    label: t('documents.tab.text'),
+                    disabled: !selectedDoc.extractedText,
+                    content: (
+                      <OcrTextViewer text={selectedDoc.extractedText} ocrUsed={selectedDoc.ocrUsed} alwaysExpanded />
+                    ),
+                  },
+                ]}
+              />
             </div>
           </div>
         )}
@@ -599,7 +761,7 @@ export const Documents: React.FC<DocumentsPageProps> = ({ refreshTrigger }) => {
       {/* Chat: kept mounted while hidden so the conversation survives closing it */}
       {chatOpen && <div className="fixed inset-0 bg-black/30 z-20 xl:hidden" onClick={() => setChatOpen(false)} />}
       <aside
-        className={`${chatOpen ? '' : 'hidden'} fixed inset-y-0 right-0 z-30 w-full sm:w-[400px] p-2 bg-gray-50 xl:p-0 xl:bg-transparent xl:z-auto xl:sticky xl:top-16 xl:w-[360px] xl:h-[calc(100vh-5rem)] xl:flex-shrink-0`}
+        className={`${chatOpen ? '' : 'hidden'} fixed inset-y-0 right-0 z-30 w-full sm:w-[400px] p-2 bg-gray-50 xl:p-0 xl:bg-transparent xl:z-auto xl:sticky xl:top-[60px] xl:w-[340px] xl:h-[calc(100vh-72px)] xl:flex-shrink-0`}
       >
         <ChatPanel
           disabled={documents.length === 0}

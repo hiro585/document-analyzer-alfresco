@@ -11,6 +11,10 @@ const MAX_PAGE_SIZE = 50;
 // How many search hits are considered before picking the chat documents
 const MAX_CHAT_CANDIDATES = 50;
 const MAX_CHAT_TERMS = 30;
+const MAX_RELATED_DOCUMENTS = 5;
+const MAX_RELATED_TERMS = 30;
+// Matching any term means one common word would pull in almost every document
+const RELATED_STOPWORDS = new Set(['the', 'and', 'for', 'with', 'from', 'this', 'that', 'are', 'was', 'not', 'copy']);
 
 // Read-only browsing, search and chat over the configured Alfresco site's
 // document library (including subfolders).
@@ -89,6 +93,64 @@ export function createAlfrescoDocumentsRouter(search: SearchService, ollama: Oll
     if (!alfresco) return;
     try {
       res.json(await alfresco.getSiteDocument(req.params.nodeId));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  /**
+   * Other documents in the site that share terms with this one, in Alfresco's
+   * relevance order (Alfresco has no "more like this" search to call directly)
+   * GET /api/alfresco/documents/:nodeId/related
+   */
+  router.get('/documents/:nodeId/related', async (req, res) => {
+    const alfresco = requireService(res);
+    if (!alfresco) return;
+    try {
+      const doc = await alfresco.getSiteDocument(req.params.nodeId);
+      const terms = relatedSearchTerms(doc);
+      if (terms.length === 0) return res.json([]);
+
+      // One extra result in case the document itself is among the hits
+      const { documents } = await alfresco.searchDocuments({
+        terms,
+        match: 'any',
+        maxItems: MAX_RELATED_DOCUMENTS + 1,
+      });
+      res.json(
+        documents
+          .filter(related => related.id !== doc.id)
+          .slice(0, MAX_RELATED_DOCUMENTS)
+          .map(related => ({
+            id: related.id,
+            filename: related.filename,
+            fileType: related.fileType,
+            summary: getAlfrescoDocumentSummary(related, search),
+          })),
+      );
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  /**
+   * GET /api/alfresco/documents/:nodeId/thumbnail (404 until Alfresco has made one)
+   */
+  router.get('/documents/:nodeId/thumbnail', async (req, res) => {
+    const alfresco = requireService(res);
+    if (!alfresco) return;
+    try {
+      const thumbnail = await alfresco.getSiteDocumentThumbnail(req.params.nodeId);
+      if (!thumbnail) {
+        return res.status(404).json({ error: 'Thumbnail not available yet' });
+      }
+      res.setHeader('Content-Type', thumbnail.mimeType);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      thumbnail.stream.on('error', err => {
+        console.error('Alfresco thumbnail stream error:', err);
+        res.destroy(err);
+      });
+      thumbnail.stream.pipe(res);
     } catch (error) {
       sendError(res, error);
     }
@@ -208,6 +270,27 @@ function getAlfrescoDocumentContext(doc: AlfrescoDocument, search: SearchService
   }
   if (doc.alfresco.path) lines.push(`Alfresco folder: ${doc.alfresco.path}`);
   return lines.join('\n');
+}
+
+// Search terms describing a document: the keywords this app extracted when it
+// exported the document, then words from its name, title and description
+// (the only text available for documents added to Alfresco some other way).
+function relatedSearchTerms(doc: AlfrescoDocument): string[] {
+  const stripExtension = (name: string) => name.replace(/\.[^.]+$/, '');
+  const text = [stripExtension(doc.alfresco.name), stripExtension(doc.filename), doc.alfresco.description || ''].join(
+    ' ',
+  );
+  const words = text
+    .toLowerCase()
+    .split(/[\s_\-.,;:!?()[\]{}"'/\\、。・「」（）]+/)
+    .filter(Boolean);
+  const textTerms = expandQueryTerms(words).filter(
+    // Pure numbers are mostly the timestamps added to exported filenames
+    t => (/[^\x00-\x7f]/.test(t) || t.length >= 3) && !/^\d+$/.test(t) && !RELATED_STOPWORDS.has(t),
+  );
+
+  const keywords = doc.keywords.map(k => k.trim().toLowerCase()).filter(Boolean);
+  return [...new Set([...keywords, ...textTerms])].slice(0, MAX_RELATED_TERMS);
 }
 
 function getAlfrescoDocumentSummary(doc: AlfrescoDocument, search: SearchService): string {

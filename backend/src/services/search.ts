@@ -17,28 +17,26 @@ function tokenize(text: string): { words: Set<string>; cjkRuns: string[] } {
   };
 }
 
-// Overlap of two token sets as a fraction (0-1): shared tokens over all distinct tokens.
-function jaccardSimilarity(
-  a: { words: Set<string>; cjkRuns: string[] },
-  b: { words: Set<string>; cjkRuns: string[] },
-): number {
-  const setA = new Set([...a.words, ...a.cjkRuns]);
-  const setB = new Set([...b.words, ...b.cjkRuns]);
-  if (setA.size === 0 || setB.size === 0) return 0;
-
-  let intersection = 0;
-  for (const token of setA) {
-    if (setB.has(token)) intersection++;
-  }
-  return intersection / (setA.size + setB.size - intersection);
-}
-
-function documentBagOfWords(doc: { filename: string; keywords: string[]; extractedData: Record<string, any> }): string {
-  return [
-    doc.filename,
+// Terms for document-to-document similarity. CJK runs are split into bigrams
+// since there are no word boundaries; TF-IDF weighting later discounts the
+// grammatical bigrams and boilerplate words that appear in most documents.
+function similarityTerms(doc: Document): Map<string, number> {
+  const text = [
     ...doc.keywords,
     ...Object.values(doc.extractedData || {}).map(v => (typeof v === 'string' ? v : JSON.stringify(v))),
-  ].join(' ');
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const counts = new Map<string, number>();
+  const add = (term: string) => counts.set(term, (counts.get(term) || 0) + 1);
+  for (const word of text.match(ASCII_WORD_PATTERN) || []) {
+    if (word.length >= 3 && !/^\d+$/.test(word)) add(word);
+  }
+  for (const run of text.match(CJK_RUN_PATTERN) || []) {
+    for (let i = 0; i < run.length - 1; i++) add(run.slice(i, i + 2));
+  }
+  return counts;
 }
 
 function matchesTerm(term: string, tokens: { words: Set<string>; cjkRuns: string[] }): boolean {
@@ -134,20 +132,46 @@ export class SearchService {
     return ranked;
   }
 
-  // Finds already-stored documents whose keywords/summary text significantly
-  // overlap with the given candidate, for the "similar document" check agent.
-  // Plain text/keyword overlap only — no AI model call.
-  async findSimilarDocuments(
-    candidate: { filename: string; keywords: string[]; extractedData: Record<string, any> },
-    limit = 5,
-    minScore = 0.1,
-  ): Promise<{ doc: Document; score: number }[]> {
+  // Other stored documents ranked by TF-IDF cosine similarity to the given one.
+  async findRelatedDocuments(docId: string, limit = 5, minScore = 0.1): Promise<{ doc: Document; score: number }[]> {
     const documents = await this.storage.listDocuments();
-    const candidateTokens = tokenize(documentBagOfWords(candidate));
+    const targetIndex = documents.findIndex(d => d.id === docId);
+    if (targetIndex === -1) return [];
+
+    const termCounts = documents.map(similarityTerms);
+    const docFrequency = new Map<string, number>();
+    for (const counts of termCounts) {
+      for (const term of counts.keys()) docFrequency.set(term, (docFrequency.get(term) || 0) + 1);
+    }
+
+    const vectors = termCounts.map(counts => {
+      const weights = new Map<string, number>();
+      let sumSquares = 0;
+      for (const [term, count] of counts) {
+        const weight = count * Math.log(documents.length / docFrequency.get(term)!);
+        if (weight > 0) {
+          weights.set(term, weight);
+          sumSquares += weight * weight;
+        }
+      }
+      return { weights, norm: Math.sqrt(sumSquares) };
+    });
+
+    const target = vectors[targetIndex];
+    if (target.norm === 0) return [];
 
     return documents
-      .map(doc => ({ doc, score: jaccardSimilarity(candidateTokens, tokenize(documentBagOfWords(doc))) }))
-      .filter(s => s.score >= minScore)
+      .map((doc, i) => {
+        const other = vectors[i];
+        if (other.norm === 0) return { doc, score: 0 };
+        let dot = 0;
+        for (const [term, weight] of target.weights) {
+          const otherWeight = other.weights.get(term);
+          if (otherWeight) dot += weight * otherWeight;
+        }
+        return { doc, score: dot / (target.norm * other.norm) };
+      })
+      .filter(s => s.doc.id !== docId && s.score >= minScore)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }

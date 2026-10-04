@@ -4,7 +4,6 @@
 # Usage: ./test-alfresco.sh
 
 API_URL="http://localhost:3001"
-ALFRESCO_URL="http://alfrescourl/alfresco/api/-default-/public/alfresco/versions/1"
 
 echo "🧪 Testing Alfresco Integration"
 echo "================================"
@@ -28,7 +27,7 @@ if echo "$response" | grep -q '"success":true'; then
     echo "✅ Connected to Alfresco successfully"
 else
     echo "❌ Failed to connect to Alfresco"
-    echo "   Check your credentials and URL"
+    echo "   Check ALFRESCO_URL, ALFRESCO_USERNAME and ALFRESCO_PASSWORD in .env"
     exit 1
 fi
 echo ""
@@ -73,8 +72,3 @@ echo ""
 
 echo "================================"
 echo "🎉 All tests completed!"
-echo ""
-echo "Next steps:"
-echo "- Review exported data in Alfresco at: $ALFRESCO_URL"
-echo "- Integrate export button into your UI"
-echo "- Configure credentials in environment variables"

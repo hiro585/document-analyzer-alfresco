@@ -2,14 +2,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { execFile } from 'child_process';
+import { randomUUID } from 'crypto';
 import { promisify } from 'util';
-import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { OllamaService } from './ollama.js';
 
 const execFileAsync = promisify(execFile);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const MAX_PDF_PAGES = 5;
 // Below this many characters, a page's embedded text layer is treated as absent (scanned page) rather than sparse
@@ -18,24 +17,14 @@ const MIN_TEXT_LENGTH_PER_PAGE = 20;
 export class FileProcessor {
   constructor(private ollama: OllamaService) {}
 
-  async processImage(filePath: string): Promise<{ content: string; thumbnail: Buffer }> {
-    const fileContent = await fs.readFile(filePath);
-    const base64Content = fileContent.toString('base64');
-
-    // Generate thumbnail
-    const thumbnail = await sharp(filePath).resize(200, 200, { fit: 'cover' }).jpeg({ quality: 80 }).toBuffer();
-
-    return {
-      content: base64Content,
-      thumbnail,
-    };
+  async createImageThumbnail(filePath: string): Promise<Buffer> {
+    return sharp(filePath).resize(200, 200, { fit: 'cover' }).jpeg({ quality: 80 }).toBuffer();
   }
 
   async processText(filePath: string): Promise<{ content: string; thumbnail: Buffer }> {
     const fileContent = await fs.readFile(filePath, 'utf-8');
 
-    // Generate text file thumbnail
-    const thumbnail = await this.generateSimpleThumbnail('📝 TXT');
+    const thumbnail = await this.generatePlaceholderThumbnail();
 
     return {
       content: fileContent,
@@ -56,7 +45,7 @@ export class FileProcessor {
       pageCount = pdf.numPages;
     } catch (error) {
       console.error('Failed to load PDF with pdfjs:', error);
-      const thumbnail = await this.generateSimpleThumbnail('PDF');
+      const thumbnail = await this.generatePlaceholderThumbnail();
       return { content: 'PDF file', pageCount: 1, thumbnail, ocrUsed: false };
     }
 
@@ -89,7 +78,7 @@ export class FileProcessor {
       textContent = await this.transcribePdfPagesWithVision(filePath, pagesToRead);
     }
 
-    const thumbnail = await this.generateSimpleThumbnail(`PDF - ${pageCount} page${pageCount > 1 ? 's' : ''}`);
+    const thumbnail = await this.generatePlaceholderThumbnail();
 
     return {
       content: textContent || 'PDF file',
@@ -130,8 +119,36 @@ export class FileProcessor {
     return pageTexts.filter(Boolean).join('\n');
   }
 
-  private async generateSimpleThumbnail(text: string): Promise<Buffer> {
-    // Create a simple colored thumbnail using sharp
+  // The top of the first page as a 200x200 JPEG (the upper part of a document
+  // is the most recognizable: letterhead, title, form header).
+  async renderPdfThumbnail(pdfPath: string): Promise<Buffer> {
+    const imagePrefix = path.join(os.tmpdir(), `thumb-${randomUUID()}`);
+    const imagePath = `${imagePrefix}.png`;
+    try {
+      await execFileAsync('pdftoppm', [
+        '-png',
+        '-f',
+        '1',
+        '-l',
+        '1',
+        '-singlefile',
+        '-scale-to',
+        '400',
+        pdfPath,
+        imagePrefix,
+      ]);
+      return await sharp(imagePath)
+        .resize(200, 200, { fit: 'cover', position: 'top' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    } finally {
+      await fs.unlink(imagePath).catch(() => {});
+    }
+  }
+
+  // A plain blue square. The UI shows file-type icons for text files and renders
+  // PDF thumbnails on demand (renderPdfThumbnail), so this is only a fallback.
+  private async generatePlaceholderThumbnail(): Promise<Buffer> {
     return sharp({
       create: {
         width: 200,
@@ -142,10 +159,5 @@ export class FileProcessor {
     })
       .jpeg({ quality: 80 })
       .toBuffer();
-  }
-
-  async saveThumbnail(docId: string, thumbnail: Buffer, dataDir: string): Promise<void> {
-    const thumbnailPath = path.join(dataDir, 'documents', docId, 'thumbnail.jpg');
-    await fs.writeFile(thumbnailPath, thumbnail);
   }
 }

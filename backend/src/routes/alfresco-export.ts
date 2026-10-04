@@ -1,31 +1,6 @@
 import { Router, Request, Response } from 'express';
-import * as path from 'path';
-import * as url from 'url';
-import * as fs from 'fs/promises';
 import { StorageService } from '../services/storage.js';
 import { AlfrescoService, AlfrescoConfig, loadAlfrescoConfig } from '../services/alfresco.js';
-
-const __filename = url.fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * Find the original file path for a document
- */
-async function getDocumentFilePath(documentId: string, fileType: string): Promise<string> {
-  const dataDir = path.join(__dirname, '..', '..', 'data');
-  const docDir = path.join(dataDir, 'documents', documentId);
-
-  // List files in document directory
-  const files = await fs.readdir(docDir);
-
-  // Find original file (starts with 'original.')
-  const originalFile = files.find(f => f.startsWith('original.'));
-  if (originalFile) {
-    return path.join(docDir, originalFile);
-  }
-
-  throw new Error(`Original file not found for document ${documentId}`);
-}
 
 export function createAlfrescoExportRouter(storage: StorageService) {
   const router = Router();
@@ -87,8 +62,13 @@ export function createAlfrescoExportRouter(storage: StorageService) {
         });
       }
 
-      // Get actual file path
-      const filePath = await getDocumentFilePath(documentId, document.fileType);
+      const filePath = await storage.getOriginalFilePath(documentId);
+      if (!filePath) {
+        return res.status(404).json({
+          success: false,
+          error: 'Original file not found',
+        });
+      }
 
       // Store to Alfresco
       const config = getAlfrescoConfig();
@@ -128,8 +108,10 @@ export function createAlfrescoExportRouter(storage: StorageService) {
 
       for (const doc of documents) {
         try {
-          // Get actual file path
-          const filePath = await getDocumentFilePath(doc.id, doc.fileType);
+          const filePath = await storage.getOriginalFilePath(doc.id);
+          if (!filePath) {
+            throw new Error(`Original file not found for document ${doc.id}`);
+          }
           const result = await alfrescoService.storeDocumentData(doc, filePath);
           results.push(result);
 

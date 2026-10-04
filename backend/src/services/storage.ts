@@ -2,8 +2,23 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Document, PromptStore, SearchIndex } from '../types/index.js';
 
+// Document ids are UUIDs. Ids come from request URLs, so anything else (e.g.
+// "..") is rejected before it can become part of a filesystem path.
+const DOC_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidDocumentId(docId: string): boolean {
+  return DOC_ID_PATTERN.test(docId);
+}
+
 export class StorageService {
   constructor(private dataDir: string) {}
+
+  private docDir(docId: string): string {
+    if (!isValidDocumentId(docId)) {
+      throw new Error(`Invalid document id: ${docId}`);
+    }
+    return path.join(this.dataDir, 'documents', docId);
+  }
 
   async initializeStorage(): Promise<void> {
     const dirs = [path.join(this.dataDir, 'documents')];
@@ -89,7 +104,7 @@ export class StorageService {
   }
 
   async saveDocument(doc: Document): Promise<void> {
-    const docDir = path.join(this.dataDir, 'documents', doc.id);
+    const docDir = this.docDir(doc.id);
     await fs.mkdir(docDir, { recursive: true });
 
     const metadataPath = path.join(docDir, 'metadata.json');
@@ -100,7 +115,8 @@ export class StorageService {
   }
 
   async loadDocument(docId: string): Promise<Document | null> {
-    const metadataPath = path.join(this.dataDir, 'documents', docId, 'metadata.json');
+    if (!isValidDocumentId(docId)) return null;
+    const metadataPath = path.join(this.docDir(docId), 'metadata.json');
     try {
       const data = await fs.readFile(metadataPath, 'utf-8');
       return JSON.parse(data);
@@ -123,7 +139,7 @@ export class StorageService {
   }
 
   async deleteDocument(docId: string): Promise<void> {
-    const docDir = path.join(this.dataDir, 'documents', docId);
+    const docDir = this.docDir(docId);
     await fs.rm(docDir, { recursive: true, force: true });
 
     // Remove from index
@@ -152,24 +168,31 @@ export class StorageService {
 
   async saveOriginalFile(docId: string, filePath: string, originalFileName: string): Promise<void> {
     const ext = path.extname(originalFileName);
-    const docDir = path.join(this.dataDir, 'documents', docId);
+    const docDir = this.docDir(docId);
     const destPath = path.join(docDir, `original${ext}`);
     await fs.copyFile(filePath, destPath);
   }
 
   async saveThumbnail(docId: string, thumbnail: Buffer): Promise<void> {
-    const docDir = path.join(this.dataDir, 'documents', docId);
+    const docDir = this.docDir(docId);
     await fs.mkdir(docDir, { recursive: true });
     const thumbnailPath = path.join(docDir, 'thumbnail.jpg');
     await fs.writeFile(thumbnailPath, thumbnail);
   }
 
   async getThumbnailPath(docId: string): Promise<string> {
-    return path.join(this.dataDir, 'documents', docId, 'thumbnail.jpg');
+    return path.join(this.docDir(docId), 'thumbnail.jpg');
+  }
+
+  // First-page thumbnail for PDFs, rendered on first request (the thumbnail.jpg
+  // saved at upload is only a plain placeholder for PDFs).
+  getPdfThumbnailPath(docId: string): string {
+    return path.join(this.docDir(docId), 'pdf-thumbnail.jpg');
   }
 
   async getOriginalFilePath(docId: string): Promise<string | null> {
-    const docDir = path.join(this.dataDir, 'documents', docId);
+    if (!isValidDocumentId(docId)) return null;
+    const docDir = this.docDir(docId);
     try {
       const files = await fs.readdir(docDir);
       const original = files.find(f => f.startsWith('original'));

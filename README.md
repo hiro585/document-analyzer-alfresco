@@ -2,6 +2,12 @@
 
 A local, privacy-first web app for analyzing documents with AI. Upload PDFs, images, or text files, describe what to extract in a prompt, and a model running locally in [Ollama](https://ollama.com) returns structured data. Optional AI "agents" can check documents for fraud, missing information, or mismatches against a reference list. You can browse the document library, chat with your documents, and export them to Alfresco if you use it. The UI and AI responses support English and Japanese.
 
+## Screenshots
+
+| English | Japanese |
+|---------|----------|
+| ![Upload page in English: file drop zone, analysis prompt, and optional AI agents](docs/screenshots/screenshot-upload-en.png) | ![Upload page in Japanese](docs/screenshots/screenshot-upload-jp.png) |
+
 ## Features
 
 - **Upload and extract**: drag and drop a PDF, JPG/PNG, or TXT file and choose a prompt template or write your own. The model returns structured fields plus keywords.
